@@ -30,8 +30,11 @@ public class RideService {
     @Transactional
     public RideResponseDTO create(RidecreateDTO ride) {
 
-        List<Ride.Status> Status = List.of(Ride.Status.CREATED, Ride.Status.ACTIVE);
-        List<Ride> rides = rideRepo.findByDriverIdAndStatusIn(ride.driverId(), Status);
+        // Inside your create(RidecreateDTO ride) method in RideService.java
+        List<Ride.Status> statuses = List.of(Ride.Status.CREATED, Ride.Status.ACTIVE);
+
+// FIXED: Invoke findByDriverAndStatusIn (No "Id" suffix)
+        List<Ride> rides = rideRepo.findByDriverAndStatusIn(ride.driverId(), statuses);
 
         if (!rides.isEmpty()) {
             throw new RuntimeException("Ride is already exist!");
@@ -79,7 +82,7 @@ public class RideService {
             throw  new IllegalArgumentException("The ride cant provide requested no of seats " + "Available seats "+rd.getSeats());
         }
 
-        rd.setSeats(rd.getSeats()-1);
+        rd.setSeats(rd.getSeats()-ridebook.seatsToBook());
 
         if (rd.getSeats() == 0) {
             rd.setStatus(Ride.Status.ACTIVE);
