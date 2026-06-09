@@ -13,6 +13,7 @@ import java.util.UUID;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@Table(name = "ride")
 public class Ride {
 
     @Id
@@ -29,11 +30,18 @@ public class Ride {
     @Column(nullable = false)
     private Double seatFare;
 
-    @Column(columnDefinition = "geometry(Point, 4326)", nullable = false)
-    private Point start;
+    @Column(nullable = false, name = "start_latitude")
+    private Double startLatitude;
 
-    @Column(columnDefinition = "geometry(Point, 4326)", nullable = false)
-    private Point end;
+    @Column(nullable = false, name = "start_longitude")
+    private Double startLongitude;
+
+    // Drop-off Coordinates
+    @Column(nullable = false, name = "end_latitude")
+    private Double endLatitude;
+
+    @Column(nullable = false, name = "end_longitude")
+    private Double endLongitude;
 
     @Column(nullable = false)
     private Integer seats;

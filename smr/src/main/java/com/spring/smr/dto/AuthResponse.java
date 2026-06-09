@@ -1,7 +1,6 @@
 package com.spring.smr.dto;
 
 import lombok.*;
-
 import java.util.UUID;
 
 @Getter
@@ -10,8 +9,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 public class AuthResponse {
-
-    private String mail ;
-    private UUID id ;
+    private UUID id;
+    private String mail;
     private String name;
+    private String token; // 🔐 Added to sign subsequent distributed microservice headers
 }

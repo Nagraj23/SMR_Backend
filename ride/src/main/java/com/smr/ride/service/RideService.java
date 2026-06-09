@@ -5,10 +5,6 @@ import com.smr.ride.dto.RidecreateDTO;
 import com.smr.ride.dto.RideResponseDTO;
 import com.smr.ride.entity.Ride;
 import com.smr.ride.repo.RideRepository;
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Point;
-import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +16,6 @@ import java.util.UUID;
 public class RideService {
 
     private final RideRepository rideRepo;
-    private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
 
     // Constructor injection (Best practice for Spring Bean wiring)
     public RideService(RideRepository rideRepository) {
@@ -30,77 +25,81 @@ public class RideService {
     @Transactional
     public RideResponseDTO create(RidecreateDTO ride) {
 
-        // Inside your create(RidecreateDTO ride) method in RideService.java
         List<Ride.Status> statuses = List.of(Ride.Status.CREATED, Ride.Status.ACTIVE);
 
-// FIXED: Invoke findByDriverAndStatusIn (No "Id" suffix)
+        // Pre-flight Conflict Scan
         List<Ride> rides = rideRepo.findByDriverAndStatusIn(ride.driverId(), statuses);
-
         if (!rides.isEmpty()) {
-            throw new RuntimeException("Ride is already exist!");
+            throw new RuntimeException("Ride already exists for this driver!");
         }
 
-        Point startPoint = geometryFactory.createPoint(new Coordinate(ride.startLongitude(), ride.startLatitude()));
-        Point endPoint = geometryFactory.createPoint(new Coordinate(ride.endLongitude(), ride.endLatitude()));
-
+        // Mapping primitive numerical fields directly into the entity builder
         Ride rd = Ride.builder()
                 .driver(ride.driverId())
                 .vehicle(ride.vehicleId())
-                .start(startPoint)
-                .end(endPoint)
+                .seatFare(ride.seatFare())
+                .startLatitude(ride.startLatitude())
+                .startLongitude(ride.startLongitude())
+                .endLatitude(ride.endLatitude())
+                .endLongitude(ride.endLongitude())
                 .seats(ride.availableSeats())
-                .depart(LocalDateTime.now()) // Or pull departure time from request if added later
+                .depart(LocalDateTime.now())
                 .status(Ride.Status.CREATED)
                 .build();
 
         rideRepo.save(rd);
 
-        return new RideResponseDTO(rd.getId(),
+        return new RideResponseDTO(
+                rd.getId(),
                 rd.getDriver(),
                 rd.getVehicle(),
-                rd.getStart().getY(), // Latitude is Y coordinate
-                rd.getStart().getX(), // Longitude is X coordinate
-                rd.getEnd().getY(),
-                rd.getEnd().getX(),
+                rd.getStartLatitude(),
+                rd.getStartLongitude(),
+                rd.getEndLatitude(),
+                rd.getEndLongitude(),
                 rd.getSeats(),
-                ride.seatFare(), // Keeping fare logic intact from your requested structure
+                rd.getSeatFare(),
                 rd.getStatus().name(),
-                LocalDateTime.now());
+                rd.getDepart()
+        );
     }
 
     @Transactional
-    public RideResponseDTO book(RideBookRequestDTO ridebook , UUID ride_id){
+    public RideResponseDTO book(RideBookRequestDTO ridebook, UUID ride_id) {
 
         Ride rd = rideRepo.findById(ride_id)
-                .orElseThrow(()-> new IllegalArgumentException("Ride not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Ride not found"));
 
-        if(rd.getStatus()!= Ride.Status.CREATED && rd.getStatus() != Ride.Status.ACTIVE){
-            throw new IllegalArgumentException("Ride not active at this time ");
+        if (rd.getStatus() != Ride.Status.CREATED && rd.getStatus() != Ride.Status.ACTIVE) {
+            throw new IllegalArgumentException("Ride is not active at this time");
         }
 
-        if(rd.getSeats() < ridebook.seatsToBook()){
-            throw  new IllegalArgumentException("The ride cant provide requested no of seats " + "Available seats "+rd.getSeats());
+        if (rd.getSeats() < ridebook.seatsToBook()) {
+            throw new IllegalArgumentException("The ride cannot provide requested number of seats. Available seats: " + rd.getSeats());
         }
 
-        rd.setSeats(rd.getSeats()-ridebook.seatsToBook());
+        // Deduct matching inventory units safely
+        rd.setSeats(rd.getSeats() - ridebook.seatsToBook());
 
+        // Dynamic State Transition logic
         if (rd.getSeats() == 0) {
             rd.setStatus(Ride.Status.ACTIVE);
         }
 
         Ride upride = rideRepo.save(rd);
 
-        return new RideResponseDTO(upride.getId(),
+        return new RideResponseDTO(
+                upride.getId(),
                 upride.getDriver(),
                 upride.getVehicle(),
-                upride.getStart().getY(),
-                upride.getStart().getX(),
-                upride.getEnd().getY(),
-                upride.getEnd().getX(),
+                upride.getStartLatitude(),
+                upride.getStartLongitude(),
+                upride.getEndLatitude(),
+                upride.getEndLongitude(),
                 upride.getSeats(),
-                null, // Fare can be managed here or pulled dynamically
+                upride.getSeatFare(),
                 upride.getStatus().name(),
-                upride.getDepart());
-    };
-
+                upride.getDepart()
+        );
+    }
 }

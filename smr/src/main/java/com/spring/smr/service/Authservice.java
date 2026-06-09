@@ -1,14 +1,15 @@
 package com.spring.smr.service;
 
 import com.spring.smr.Security.EmailService;
+import com.spring.smr.Security.JwtProvider;
 import com.spring.smr.dto.AuthResponse;
 import com.spring.smr.dto.LoginDTO;
 import com.spring.smr.dto.RegisterDTO;
-import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.spring.smr.entity.Users;
+import com.spring.smr.Security.JwtProvider;
 import com.spring.smr.repo.UsersRepository;
 
 import java.util.Map;
@@ -17,22 +18,24 @@ import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-@RequiredArgsConstructor// Generates a constructor ONLY for fields marked final under the hood
+@RequiredArgsConstructor
 public class Authservice {
 
-    // These fields remain final because they are Spring-managed Beans to be injected
     private final UsersRepository userRepo;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final JwtProvider jwtProvider;
 
-
-    private Map<String, Boolean> otpVerifiedForReset = new ConcurrentHashMap<>();
-    private Map<String, String> otpStore = new ConcurrentHashMap<>();
-    private Map<String, Long> otpExpiry = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> otpVerifiedForReset = new ConcurrentHashMap<>();
+    private final Map<String, String> otpStore = new ConcurrentHashMap<>();
+    private final Map<String, Long> otpExpiry = new ConcurrentHashMap<>();
 
     private static final long OTP_EXPIRY_MS = 2 * 60 * 1000;
 
     public String generateOTP(String email) {
+        if (email == null) {
+            throw new IllegalArgumentException("Cannot generate OTP: Email address argument value is null.");
+        }
         String code = String.format("%04d", new Random().nextInt(10000));
         otpStore.put(email, code);
         otpExpiry.put(email, System.currentTimeMillis() + OTP_EXPIRY_MS);
@@ -40,6 +43,10 @@ public class Authservice {
     }
 
     public AuthResponse register(RegisterDTO register) {
+        if (register == null || register.getMail() == null) {
+            throw new RuntimeException("Registration invalid: Registration payload and email properties cannot be blank.");
+        }
+
         String mail = register.getMail();
         Optional<Users> exist = userRepo.findByEmail(mail);
 
@@ -54,7 +61,11 @@ public class Authservice {
             Users savedUser = userRepo.save(existingUser);
 
             String otp = generateOTP(mail);
-            emailService.sendOtpEmail(mail, otp);
+            
+            // 🎯 BYPASS HANDSHAKE: Print directly to console to bypass network timeouts
+            System.out.println("=================================================");
+            System.out.println("🎯 LOCAL TEST OTP FOR EXISTING USER -> " + otp);
+            System.out.println("=================================================");
 
             return AuthResponse.builder()
                     .id(savedUser.getUser_id())
@@ -74,7 +85,11 @@ public class Authservice {
         Users savedUser = userRepo.save(newUser);
 
         String otp = generateOTP(mail);
-        emailService.sendOtpEmail(mail, otp);
+        
+        // 🎯 BYPASS HANDSHAKE: Print directly to console to bypass network timeouts
+        System.out.println("=================================================");
+        System.out.println("🎯 LOCAL TEST OTP FOR NEW USER -> " + otp);
+        System.out.println("=================================================");
 
         return AuthResponse.builder()
                 .id(savedUser.getUser_id())
@@ -84,6 +99,10 @@ public class Authservice {
     }
 
     public AuthResponse login(LoginDTO login) {
+        if (login == null || login.getMail() == null) {
+            throw new RuntimeException("Authentication failed: Login payload and credentials fields are required.");
+        }
+
         if (!userRepo.existsByEmail(login.getMail())) {
             throw new RuntimeException("User not found with this mail!");
         }
@@ -99,37 +118,43 @@ public class Authservice {
             throw new RuntimeException("Invalid email or password credentials!");
         }
 
+        String token = jwtProvider.generateToken(exist.getUser_id(), exist.getEmail(), exist.getName());
+
         return AuthResponse.builder()
                 .id(exist.getUser_id())
                 .mail(exist.getEmail())
                 .name(exist.getName())
+                .token(token)
                 .build();
     }
 
-    public String verifyOtp(String email, String otpInput, String type) {
-
-       String CahcedOtp = otpStore.get(email);
-       if(CahcedOtp==null){
-           throw  new RuntimeException("NO OTP found for this email");
-       }
-
-       Long expiryOtp = otpExpiry.get(email);
-       if(expiryOtp <  System.currentTimeMillis()){
-           otpStore.remove(email);
-           otpExpiry.remove(email);
-           throw new RuntimeException("OTP expired");
-       }
-
-        if(!CahcedOtp.equals(otpInput)){
-            throw new RuntimeException("OTP didnt match ");
+    public AuthResponse verifyOtp(String email, String otpInput, String type) {
+        if (email == null || otpInput == null) {
+            throw new RuntimeException("Verification request failed: Email parameter fields cannot be null.");
         }
 
-        if ("VERIFICATION".equalsIgnoreCase(type)) {
-            Users user = userRepo.findByEmail(email)
-                    .orElseThrow(() -> new RuntimeException("System lookup error: User matching token attributes not found."));
+        String CachedOtp = otpStore.get(email);
+        if (CachedOtp == null) {
+            throw new RuntimeException("NO OTP found for this email");
+        }
 
+        Long expiryOtp = otpExpiry.get(email);
+        if (expiryOtp == null || expiryOtp < System.currentTimeMillis()) {
+            otpStore.remove(email);
+            otpExpiry.remove(email);
+            throw new RuntimeException("OTP expired");
+        }
+
+        if (!CachedOtp.equals(otpInput)) {
+            throw new RuntimeException("OTP didn't match");
+        }
+
+        Users user = userRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("System lookup error: User matching token attributes not found."));
+
+        if ("VERIFICATION".equalsIgnoreCase(type)) {
             user.setVerified(true);
-            userRepo.save(user);
+            user = userRepo.save(user);
         } else if ("RESET".equalsIgnoreCase(type)) {
             otpVerifiedForReset.put(email, true);
         }
@@ -137,12 +162,22 @@ public class Authservice {
         otpStore.remove(email);
         otpExpiry.remove(email);
 
-        return "Verification transaction successfully authorized and completed!";
+       String token = jwtProvider.generateToken(user.getUser_id(), user.getEmail(), user.getName());
+
+        return AuthResponse.builder()
+                .id(user.getUser_id())
+                .mail(user.getEmail())
+                .name(user.getName())
+                .token(token)
+                .build();
     }
 
     public String forgot(String email) {
-        Optional<Users> user = userRepo.findByEmail(email);
+        if (email == null) {
+            throw new RuntimeException("Forgot password request failed: Missing target email address.");
+        }
 
+        Optional<Users> user = userRepo.findByEmail(email);
         if (user.isEmpty()) {
             throw new RuntimeException("user does not exist with this mail !");
         }
@@ -154,6 +189,10 @@ public class Authservice {
     }
 
     public boolean reset(String pass, String email) {
+        if (email == null || pass == null) {
+            throw new RuntimeException("Password mutation rejected: Missing target transactional parameters.");
+        }
+
         Boolean isVerified = otpVerifiedForReset.get(email);
         if (isVerified == null || !isVerified) {
             throw new RuntimeException("Unauthorized: OTP verification required before resetting password.");

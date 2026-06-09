@@ -44,6 +44,8 @@ public class Vehicleservice {
                 .model(vehicle.getModel())
                 .licensePlateNumber(vehicle.getLicensePlateNumber())
                 .owner(owner)
+                .createdAt(java.time.LocalDateTime.now()) // 🎯 FIX: Manually seed the constraint
+                .updatedAt(java.time.LocalDateTime.now())
                 .build();
 
         vehicleRepo.save(newVehicle);
