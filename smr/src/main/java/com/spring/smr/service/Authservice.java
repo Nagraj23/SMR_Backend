@@ -4,17 +4,23 @@ import com.spring.smr.Security.EmailService;
 import com.spring.smr.Security.JwtProvider;
 import com.spring.smr.dto.AuthResponse;
 import com.spring.smr.dto.LoginDTO;
+import com.spring.smr.dto.ProfileDTO;
 import com.spring.smr.dto.RegisterDTO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.client.MultipartBodyBuilder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.spring.smr.entity.Users;
 import com.spring.smr.Security.JwtProvider;
 import com.spring.smr.repo.UsersRepository;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.http.client.MultipartBodyBuilder;
+import org.springframework.core.ParameterizedTypeReference;
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -25,6 +31,7 @@ public class Authservice {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final JwtProvider jwtProvider;
+    private final WebClient webClient;
 
     private final Map<String, Boolean> otpVerifiedForReset = new ConcurrentHashMap<>();
     private final Map<String, String> otpStore = new ConcurrentHashMap<>();
@@ -170,6 +177,35 @@ public class Authservice {
                 .name(user.getName())
                 .token(token)
                 .build();
+    }
+
+    public String isCompleted(UUID user , ProfileDTO profile , MultipartFile file){
+
+        Users userProfile = userRepo.findById(user)
+                .orElseThrow(() -> new RuntimeException("System lookup error: User matching UUID attributes not found."));
+
+        if (!userProfile.isVerified()) {
+            throw new RuntimeException("user is nto verified");
+        }
+
+        MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
+        bodyBuilder.part("file", file.getResource());
+
+        List<Double> extractedVectors = webClient.post()
+                .uri("/verify/extract") // Python's target face embedding calculator route
+                .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<List<Double>>() {})
+                .block();
+
+        userProfile.setName(profile.name());
+        userProfile.setPhone(profile.phone());
+        userProfile.setFaceEmbedding(extractedVectors); // Drops the float collection array into Hibernate
+        userProfile.setProfileStatus("VERIFIED");
+
+        userRepo.save(userProfile);
+
+        return "Profile registration finalized successfully. Account status mutated to VERIFIED.";
     }
 
     public String forgot(String email) {

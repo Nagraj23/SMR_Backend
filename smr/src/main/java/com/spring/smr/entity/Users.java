@@ -29,6 +29,14 @@ public class Users {
     private boolean isVerified;
     private String govIdUrl;
 
+    private String profileStatus;
+
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "user_face_embeddings", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "embedding_value")
+    private List<Double> faceEmbedding;
+
+
     @OneToMany(mappedBy = "owner" ,cascade = CascadeType.ALL , fetch = FetchType.LAZY)
     private List<Vehicles> vehicles;
 

@@ -3,23 +3,33 @@ package com.smr.ride.service;
 import com.smr.ride.dto.RideBookRequestDTO;
 import com.smr.ride.dto.RidecreateDTO;
 import com.smr.ride.dto.RideResponseDTO;
+import com.smr.ride.entity.Booking;
 import com.smr.ride.entity.Ride;
 import com.smr.ride.repo.RideRepository;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.NoArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.smr.ride.dto.bookingDTO;
+import com.smr.ride.repo.BookingRepository;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
+//@AllArgsConstructor
 public class RideService {
 
     private final RideRepository rideRepo;
+    private final BookingRepository repoBook;
 
-    // Constructor injection (Best practice for Spring Bean wiring)
-    public RideService(RideRepository rideRepository) {
-        this.rideRepo = rideRepository;
+    public RideService(RideRepository rideRepo, BookingRepository repoBook) {
+        this.rideRepo = rideRepo;
+        this.repoBook = repoBook;
     }
 
     @Transactional
@@ -101,5 +111,59 @@ public class RideService {
                 upride.getStatus().name(),
                 upride.getDepart()
         );
+    }
+
+    @Transactional
+    public List<bookingDTO> bookings(UUID owner ){
+
+        List<Ride.Status> statuses = List.of(Ride.Status.CREATED, Ride.Status.ACTIVE , Ride.Status.CANCELLED);
+        List<bookingDTO> history = new ArrayList<>();
+        List<Ride> rides = rideRepo.findByDriverAndStatusIn(owner , statuses);
+
+        for(Ride ride : rides){
+            bookingDTO book = new bookingDTO();
+            book.setBookingStatus(ride.getStatus().name());
+            book.setBookingId(null);
+            book.setRideId(ride.getId());
+//            book.setCreatedAt(ride.getC);
+            book.setSeatsBooked(ride.getSeats());
+            book.setPassengerId(null);
+            book.setDriverId(ride.getDriver());
+            book.setTotalFare(ride.getSeatFare());
+            book.setDepartureTime(ride.getDepart());
+
+            book.setPickupLatitude(ride.getStartLatitude());
+            book.setPickupLongitude(ride.getStartLongitude());
+            book.setDropLatitude(ride.getEndLatitude());
+            book.setDropLongitude(ride.getEndLongitude());
+
+            history.add(book);
+        }
+        List<Booking> passengerBookings = repoBook.findByPassenger(owner);
+        for (Booking booking : passengerBookings) {
+            Ride parentRide = booking.getRide();
+
+            bookingDTO ticket = bookingDTO.builder()
+                    .bookingId(booking.getId())
+                    .bookingStatus(booking.getStatus().name())
+                    .seatsBooked(booking.getSeatsBooked())
+                    .createdAt(booking.getCreatedAt())
+                    .rideId(parentRide.getId())
+                    .passengerId(booking.getPassenger())
+                    .driverId(parentRide.getDriver())
+                    .totalFare(booking.getTotalPaid())
+                    .departureTime(parentRide.getDepart())
+                    .pickupLatitude(parentRide.getStartLatitude())
+                    .pickupLongitude(parentRide.getStartLongitude())
+                    .dropLatitude(parentRide.getEndLatitude())
+                    .dropLongitude(parentRide.getEndLongitude())
+                    .build();
+
+            history.add(ticket);
+        }
+
+       history.sort((a,b)->b.getDepartureTime().compareTo(a.getDepartureTime()));
+
+       return history;
     }
 }

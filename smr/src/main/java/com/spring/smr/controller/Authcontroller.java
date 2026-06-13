@@ -5,8 +5,14 @@ import com.spring.smr.service.Authservice;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.UUID;
 
 @RestController
 @AllArgsConstructor
@@ -44,4 +50,20 @@ public class Authcontroller {
         boolean res = auth.reset(payload.getPass(), payload.getEmail());
         return ResponseEntity.ok(res ? "Password reset successfully" : "Reset failed");
     }
+
+    @PostMapping(
+            value = "/profile/complete",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<String> finalizeUserProfile(
+            @AuthenticationPrincipal UserDetails currentUser,
+            @ModelAttribute @Valid ProfileDTO profileDto,
+            @RequestParam("file") MultipartFile profilePicFile
+    ) {
+        UUID verifiedUserId = UUID.fromString(currentUser.getUsername());
+        String serviceOutcome = auth.isCompleted(verifiedUserId, profileDto, profilePicFile);
+        return ResponseEntity.status(HttpStatus.OK).body(serviceOutcome);
+    }
+
+    
 }
