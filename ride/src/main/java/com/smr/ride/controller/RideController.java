@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -44,5 +45,18 @@ public class RideController {
         List<bookingDTO> rds = rideService.bookings(user);
 
         return new ResponseEntity<>(rds, HttpStatus.OK );
+    }
+
+    @PostMapping("/start/{bookingId}")
+    public ResponseEntity<String> startride(
+            @PathVariable("bookingId") UUID bookingId, 
+            @RequestParam("file") MultipartFile file
+    ) {
+        try {
+            String verifyRes = rideService.startRideWithBiometrics(bookingId, file);
+            return ResponseEntity.ok(verifyRes);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
+        }
     }
 }

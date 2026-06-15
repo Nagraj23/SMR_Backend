@@ -31,12 +31,6 @@ public class Users {
 
     private String profileStatus;
 
-    @ElementCollection(fetch = FetchType.LAZY)
-    @CollectionTable(name = "user_face_embeddings", joinColumns = @JoinColumn(name = "user_id"))
-    @Column(name = "embedding_value")
-    private List<Double> faceEmbedding;
-
-
     @OneToMany(mappedBy = "owner" ,cascade = CascadeType.ALL , fetch = FetchType.LAZY)
     private List<Vehicles> vehicles;
 
@@ -56,5 +50,14 @@ public class Users {
         this.updatedAt = LocalDateTime.now();
     }
 
+    // 🚀 Add this field property into your Users.java class file:
+
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(
+            name = "user_face_embeddings",
+            joinColumns = @JoinColumn(name = "user_id")
+    )
+    @Column(name = "embedding_value")
+    private List<Double> faceEmbedding;
 
 }

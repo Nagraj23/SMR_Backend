@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.smr.ride.dto.bookingDTO;
 import com.smr.ride.repo.BookingRepository;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -26,10 +28,12 @@ public class RideService {
 
     private final RideRepository rideRepo;
     private final BookingRepository repoBook;
+    private final WebClient webClient;
 
-    public RideService(RideRepository rideRepo, BookingRepository repoBook) {
+    public RideService(RideRepository rideRepo, BookingRepository repoBook , WebClient  webclient) {
         this.rideRepo = rideRepo;
         this.repoBook = repoBook;
+        this.webClient = webclient;
     }
 
     @Transactional
@@ -91,10 +95,8 @@ public class RideService {
         // Deduct matching inventory units safely
         rd.setSeats(rd.getSeats() - ridebook.seatsToBook());
 
-        // Dynamic State Transition logic
-        if (rd.getSeats() == 0) {
-            rd.setStatus(Ride.Status.ACTIVE);
-        }
+        rd.setStatus(Ride.Status.ACTIVE);
+
 
         Ride upride = rideRepo.save(rd);
 
@@ -113,6 +115,49 @@ public class RideService {
         );
     }
 
+    @Transactional
+    public String startRideWithBiometrics(UUID bookingId, MultipartFile file){
+        Booking rd = repoBook.findById(bookingId)
+                .orElseThrow(()->new RuntimeException("Ride not found"));
+
+        UUID passanger = rd.getPassenger();
+        Ride parentRide = rd.getRide();
+
+        if (rd.getStatus() == null || "CANCELLED".equalsIgnoreCase(rd.getStatus().name())) {
+            throw new RuntimeException("Onboarding Aborted: This booking reference has been cancelled.");
+        }
+
+        if (Ride.Status.CANCELLED.equals(parentRide.getStatus())) {
+            throw new RuntimeException("Onboarding Aborted: The parent trip has been cancelled by the driver.");
+        }
+
+        List<Double> storedEmbedding = webClient.get()
+                .uri("http://127.0.0.1:8080/api/auth/users/" + passanger + "/embedding")
+                .retrieve()
+                .bodyToMono(new org.springframework.core.ParameterizedTypeReference<List<Double>>() {})
+                .block();
+        String vectorParameterString = storedEmbedding.stream()
+                .map(String::valueOf)
+                .collect(java.util.stream.Collectors.joining(","));
+
+        org.springframework.http.client.MultipartBodyBuilder bodyBuilder = new org.springframework.http.client.MultipartBodyBuilder();
+        bodyBuilder.part("file", file.getResource());
+        bodyBuilder.part("stored_vector_string", vectorParameterString);
+
+        java.util.Map<String, Object> pythonResponse = webClient.post()
+                .uri("/verify/compare") // Base URL handles http://127.0.0.1:8000 natively
+                .body(org.springframework.web.reactive.function.BodyInserters.fromMultipartData(bodyBuilder.build()))
+                .retrieve()
+                .bodyToMono(new org.springframework.core.ParameterizedTypeReference<java.util.Map<String, Object>>() {})
+                .block();
+
+        Boolean isMatch = (Boolean) pythonResponse.get("is_match");
+
+        if (isMatch == null || !isMatch) {
+            throw new RuntimeException("Biometric Verification Rejected: Security breach alert! Criminal spoofing blocked.");
+        }
+        return "Biometric matching passed. Passenger verified and onboarded successfully.";
+    }
     @Transactional
     public List<bookingDTO> bookings(UUID owner ){
 
@@ -166,4 +211,6 @@ public class RideService {
 
        return history;
     }
+
+
 }
