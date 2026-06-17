@@ -30,33 +30,50 @@ public class RideController {
         return new ResponseEntity<>(rd, HttpStatus.CREATED);
     }
 
-    @PostMapping("/{rideId}/book")
-    public ResponseEntity<RideResponseDTO> book(
+    @PostMapping("/{rideId}/request-book")
+    public ResponseEntity<String> requestBooking(
             @PathVariable("rideId") UUID rideId,
             @Valid @RequestBody RideBookRequestDTO rdbook
     ) {
-
-        RideResponseDTO bookrd = rideService.book(rdbook, rideId);
-        return ResponseEntity.ok(bookrd);
+        // Invokes your updated decoupled request transaction ledger loop
+        String response = rideService.requestbook(rdbook, rideId);
+        return ResponseEntity.ok(response);
     }
 
-    @GetMapping("/bookings/{user}")
-    public ResponseEntity<List<bookingDTO>> bookings(@PathVariable UUID user ){
-        List<bookingDTO> rds = rideService.bookings(user);
-
-        return new ResponseEntity<>(rds, HttpStatus.OK );
+    @PutMapping("/bookings/{bookingId}/respond")
+    public ResponseEntity<String> respondToBookingRequest(
+            @PathVariable("bookingId") UUID bookingId,
+            @RequestParam("accept") boolean accept
+    ) {
+        // Driver passes ?accept=true or ?accept=false query parameters inside Postman
+        String response = rideService.responsebook(bookingId, accept);
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/start/{bookingId}")
     public ResponseEntity<String> startride(
-            @PathVariable("bookingId") UUID bookingId, 
+            @PathVariable("bookingId") UUID bookingId,
             @RequestParam("file") MultipartFile file
     ) {
         try {
+            // Fixed service hook inside your refactored biometric checkpoint
             String verifyRes = rideService.startRideWithBiometrics(bookingId, file);
             return ResponseEntity.ok(verifyRes);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
         }
+    }
+
+    @PutMapping("/{rideId}/complete")
+    public ResponseEntity<String> completeRide(@PathVariable("rideId") UUID rideId) {
+        // Progresses parent trip and all matched 'ONBOARDED' tickets to 'COMPLETED'
+        String response = rideService.completebook(rideId);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/bookings/{user}")
+    public ResponseEntity<List<bookingDTO>> bookings(@PathVariable UUID user) {
+        List<bookingDTO> rds = rideService.bookings(user);
+        return new ResponseEntity<>(rds, HttpStatus.OK);
     }
 }

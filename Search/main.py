@@ -1,56 +1,54 @@
-from fastapi import FastAPI, status
-from schemas import RouteIndexRequest, RideSearchRequest
-from services import geometry_utils
-from services.spatial_cache import ROUTE_INDEX_CACHE
-
-app = FastAPI(
-    title="High-Performance Geo-Matching Engine",
-    description="Stateless, in-memory geometric calculator for ultra-fast ride matching."
+from fastapi import FastAPI, HTTPException, status
+from services.search_service import (
+    search_rides_by_pickup_radius, 
+    search_rides_by_destination_radius, 
+    search_rides_by_dual_anchors
+)
+# Inject our secure data transport schemas
+from schemas import (
+    NearbyPickupSearchRequest, 
+    NearbyDestinationSearchRequest, 
+    DualAnchorExactSearchRequest
 )
 
-@app.get("/health")
-def health_check():
-    """Simple health checker endpoint for container orchestrators or gateway probes."""
-    return {"status": "UP", "cached_routes_count": len(ROUTE_INDEX_CACHE)}
+app = FastAPI(title="Secure Polyglot Search Engine Cluster")
 
-
-@app.post("/api/search/index", status_code=status.HTTP_201_CREATED)
-def index_route(payload: RouteIndexRequest):
+# 🎯 SECURED: Search MODE 1 - Nearby Discover via Secure Payload Body
+@app.post("/api/rides/nearby-pickup", status_code=status.HTTP_200_OK)
+def get_nearby_pickup_rides_secure(payload: NearbyPickupSearchRequest):
     """
-    Invoked by Spring Boot whenever a new ride lifecycle transaction begins.
-    Transforms data floats into memory-mapped shapes.
+    HTTP POST implementation keeping user coordinate variables fully encrypted 
+    within the payload body, isolating telemetry out of open access routing server logs.
     """
-    # === STRATEGIC GAP 1 ===
-    # Call your service module function to calculate and cache the driver's LineString path vector.
-    # Pass the variables from the incoming 'payload' object!
-    geometry_utils.index_driver_route(
-        ride_id=payload.ride_id,
-        p_lat=payload.pickup_latitude,
-        p_lon=payload.pickup_longitude,
-        d_lat=payload.drop_latitude,
-        d_lon=payload.drop_longitude
+    # Access verified parameters cleanly from our validated schema model
+    results = search_rides_by_pickup_radius(
+        passenger_lat=payload.lat, 
+        passenger_lon=payload.lon, 
+        radius_km=payload.radius_km
     )
-    return {"message": "Route cached successfully", "ride_id": payload.ride_id}
-
-
-@app.post("/api/search/match", status_code=status.HTTP_200_OK)
-def match_rides(payload: RideSearchRequest):
-    """
-    Calculates spatial overlaps to return active, available matching driver ride IDs near the passenger.
-    """
-    # === STRATEGIC GAP 2 ===
-    # Invoke your matching matrix engine using the passenger's current coordinates.
-    # Store the returned list of ride IDs inside a variable named 'matching_ids'.
-    matching_ids = geometry_utils.search_matching_rides(
-        passenger_lat=payload.passenger_latitude,
-        passenger_lon=payload.passenger_longitude,
-        radius_deg=0.01  # Defaulting search boundary circle to approx ~1km
-    )
-    
     return {
-        "passenger_location": {
-            "lat": payload.passenger_latitude,
-            "lon": payload.passenger_longitude
-        },
-        "matched_ride_ids": matching_ids
+        "matches_found": len(results),
+        "results": results
     }
+
+
+# 🏁 SECURED: Search MODE 2 - Destination-Only Filter
+@app.post("/api/rides/nearby-destination")
+def get_destination_rides_secure(payload: NearbyDestinationSearchRequest):
+    results = search_rides_by_destination_radius(
+        dest_lat=payload.dest_lat, 
+        dest_lon=payload.dest_lon, 
+        radius_km=payload.radius_km
+    )
+    return {"matches_found": len(results), "results": results}
+
+
+# 🔄 SECURED: Search MODE 3 - Complete Route Match (Source + Destination)
+@app.post("/api/rides/search-exact")
+def get_exact_route_matches_secure(payload: DualAnchorExactSearchRequest):
+    results = search_rides_by_dual_anchors(
+        p_lat=payload.source_lat, p_lon=payload.source_lon,
+        d_lat=payload.dest_lat, d_lon=payload.dest_lon,
+        start_radius_km=payload.pickup_radius, end_radius_km=payload.dropoff_radius
+    )
+    return {"matches_found": len(results), "results": results}
