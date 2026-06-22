@@ -179,13 +179,14 @@ public class Authservice {
                 .build();
     }
 
-    public String isCompleted(UUID user , ProfileDTO profile , MultipartFile file){
+    public String isCompleted(String email, ProfileDTO profile, MultipartFile file){
 
-        Users userProfile = userRepo.findById(user)
-                .orElseThrow(() -> new RuntimeException("System lookup error: User matching UUID attributes not found."));
+        // 🎯 DATABASE LOOKUP BY EMAIL STRING: Aligned perfectly to Option B
+        Users userProfile = userRepo.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("System lookup error: User matching email attributes not found."));
 
         if (!userProfile.isVerified()) {
-            throw new RuntimeException("user is nto verified");
+            throw new RuntimeException("user is not verified");
         }
 
         MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
@@ -208,6 +209,17 @@ public class Authservice {
         return "Profile registration finalized successfully. Account status mutated to VERIFIED.";
     }
 
+    public List<Double> getUserEmbedding(UUID userId) {
+        Users user = userRepo.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Target system account row not found"));
+                
+        if (user.getFaceEmbedding() == null || user.getFaceEmbedding().isEmpty()) {
+            throw new RuntimeException("Biometric Profile Incomplete: Face matrix records are missing.");
+        }
+        
+        return user.getFaceEmbedding();
+    }
+    
     public String forgot(String email) {
         if (email == null) {
             throw new RuntimeException("Forgot password request failed: Missing target email address.");

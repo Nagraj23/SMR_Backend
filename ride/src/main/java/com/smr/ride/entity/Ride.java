@@ -58,6 +58,7 @@ public class Ride {
         CREATED,
         ACTIVE,
         COMPLETED,
-        CANCELLED
+        CANCELLED,
+        PENDING
     }
 }

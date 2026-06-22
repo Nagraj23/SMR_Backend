@@ -13,9 +13,5 @@ public record ProfileDTO(
 
         @NotBlank(message = "Phone number is required")
         @Pattern(regexp = "^\\+?[1-9]\\d{1,14}$", message = "Invalid phone number format. Use international E.164 standard (e.g. +1234567890)")
-        String phone,
-
-        @NotEmpty(message = "Biometric face embedding vector array cannot be empty or null")
-        @Size(min = 128, max = 512, message = "Face embedding dimensions must be exactly 128 or 512 depending on the network model")
-        List<Double> faceEmbedding
+        String phone
 ) {}

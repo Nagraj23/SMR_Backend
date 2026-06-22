@@ -26,18 +26,21 @@ public class RideService {
     private final RideRepository rideRepo;
     private final BookingRepository repoBook;
     private final WebClient webClient;
+    private final NotificationHubService notificationHub; // 🎯 Clean decoupled layer dependency
 
-    public RideService(RideRepository rideRepo, BookingRepository repoBook, WebClient webClient) {
+    // Constructor casing fixed with lower w, upper C, and notificationHub mapped
+    public RideService(RideRepository rideRepo, BookingRepository repoBook,
+                       WebClient webClient, NotificationHubService notificationHub) {
         this.rideRepo = rideRepo;
         this.repoBook = repoBook;
         this.webClient = webClient;
+        this.notificationHub = notificationHub;
     }
 
     @Transactional
     public RideResponseDTO create(RidecreateDTO ride) {
         List<Ride.Status> statuses = List.of(Ride.Status.CREATED, Ride.Status.ACTIVE);
 
-        // Pre-flight Conflict Scan
         List<Ride> rides = rideRepo.findByDriverAndStatusIn(ride.driverId(), statuses);
         if (!rides.isEmpty()) {
             throw new RuntimeException("Ride already exists for this driver!");
@@ -66,9 +69,6 @@ public class RideService {
         );
     }
 
-    // =====================================================================
-    // 🔄 PHASE 1: PASSENGER REQUESTS CONDITIONAL APPROVAL REFERENCE
-    // =====================================================================
     @Transactional
     public String requestbook(RideBookRequestDTO dto, UUID rideId) {
         Ride rd = rideRepo.findById(rideId)
@@ -87,17 +87,24 @@ public class RideService {
                 .passenger(dto.passengerId())
                 .seatsBooked(dto.seatsToBook())
                 .totalPaid(rd.getSeatFare() * dto.seatsToBook())
-                .status(Booking.Status.PENDING) // Initial transactional tracking state
+                .status(Booking.Status.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
 
         repoBook.save(book);
+
+        // 🚀 RESTORED: Asynchronous Redis notification dispatch to driver
+        notificationHub.sendRedisNotification(
+                rd.getDriver(),
+                "BOOKING_REQUEST",
+                "New Ride Request! 🎯",
+                "A passenger wants to book " + dto.seatsToBook() + " seat(s) on your route.",
+                Map.of("bookingId", book.getId().toString(), "rideId", rideId.toString())
+        );
+
         return "Booking request submitted successfully! Awaiting response from driver.";
     }
 
-    // =====================================================================
-    // 🛠️ PHASE 2: DRIVER EVALUATES PASSENGER ENTRANCE (ACCEPT/REJECT)
-    // =====================================================================
     @Transactional
     public String responsebook(UUID bookingId, boolean accept) {
         Booking book = repoBook.findById(bookingId)
@@ -109,25 +116,31 @@ public class RideService {
 
         Ride rd = book.getRide();
 
-        // Path A: Driver rejects the passenger request ticket
         if (!accept) {
             book.setStatus(Booking.Status.REJECTED);
             repoBook.save(book);
+
+            // 🚀 RESTORED: Asynchronous notification to passenger on reject
+            notificationHub.sendRedisNotification(
+                    book.getPassenger(),
+                    "BOOKING_REJECTED",
+                    "Request Update ❌",
+                    "The driver was unable to accept your request.",
+                    null
+            );
+
             return "Booking request successfully rejected. Passenger has been notified.";
         }
 
-        // Path B: Driver accepts passenger request ticket - Validate inventory safety constraints
         if (rd.getSeats() < book.getSeatsBooked()) {
             book.setStatus(Booking.Status.EXPIRED);
             repoBook.save(book);
             throw new IllegalArgumentException("Approval Failed: Your vehicle space just ran out of open slots.");
         }
 
-        // Subtract structural space allocation variables safely from target entity row
         rd.setSeats(rd.getSeats() - book.getSeatsBooked());
         book.setStatus(Booking.Status.CONFIRMED);
 
-        // Progress parent ride tracking if it was idling at creation thresholds
         if (rd.getStatus() == Ride.Status.CREATED) {
             rd.setStatus(Ride.Status.ACTIVE);
         }
@@ -135,12 +148,18 @@ public class RideService {
         repoBook.save(book);
         rideRepo.save(rd);
 
+        // 🚀 RESTORED: Asynchronous notification to passenger on accept
+        notificationHub.sendRedisNotification(
+                book.getPassenger(),
+                "BOOKING_ACCEPTED",
+                "Ride Confirmed! 🎉",
+                "Your driver has approved the booking request! Meet at the pickup location.",
+                Map.of("rideId", rd.getId().toString(), "updatedSeats", rd.getSeats())
+        );
+
         return "Passenger successfully confirmed on your route manifest ledger.";
     }
 
-    // =====================================================================
-    // 🔒 PHASE 3: BIOMETRIC CHECK HANDSHAKE -> PASSENGER COMMITS TO CAR
-    // =====================================================================
     @Transactional
     public String startRideWithBiometrics(UUID bookingId, MultipartFile file) {
         Booking rd = repoBook.findById(bookingId)
@@ -157,12 +176,14 @@ public class RideService {
             throw new RuntimeException("Onboarding Aborted: The parent trip has been cancelled by the driver.");
         }
 
-        // Call Identity cluster service layer over loopback interfaces
-        List<Double> storedEmbedding = webClient.get()
-                .uri("http://127.0.0.1:8080/api/auth/users/" + passenger + "/embedding")
+        List<Double> storedEmbedding = webClient.mutate()
+                .baseUrl("http://localhost:8081") // 1️⃣ Overrides base URL to point to Java Auth Service
+                .build()
+                .get()                            // 2️⃣ Declares an HTTP GET Request method
+                .uri("/api/auth/users/" + passenger + "/embedding") // 3️⃣ Suffixes the REST endpoint path
                 .retrieve()
                 .bodyToMono(new org.springframework.core.ParameterizedTypeReference<List<Double>>() {})
-                .block();
+                .block();                         // 4️⃣ Synchronously blocks the thread until the array list drops back
 
         String vectorParameterString = storedEmbedding.stream()
                 .map(String::valueOf)
@@ -185,22 +206,26 @@ public class RideService {
             throw new RuntimeException("Biometric Verification Rejected: Security breach alert! Criminal spoofing blocked.");
         }
 
-        // 🎯 FIXED: Persist actual status progression transitions into database space
         rd.setStatus(Booking.Status.ONBOARDED);
         repoBook.save(rd);
+
+        // 🚀 RESTORED: Onboarding alert trigger
+        notificationHub.sendRedisNotification(
+                passenger,
+                "RIDE_STARTED",
+                "Trip Started Safely 🏍️",
+                "Biometrics validated successfully. Your ride is currently active.",
+                Map.of("rideId", parentRide.getId().toString())
+        );
 
         return "Biometric matching passed. Passenger verified and onboarded successfully.";
     }
 
-    // =====================================================================
-    // 🏁 PHASE 4: FINALIZATION ENGINE AT DESTINATION TERMINUS
-    // =====================================================================
     @Transactional
     public String completebook(UUID rideId) {
         Ride rd = rideRepo.findById(rideId)
                 .orElseThrow(() -> new IllegalArgumentException("Target operational route not found"));
 
-        // 🎯 FIXED: Logical operator alignment correction gate
         if (rd.getStatus() == Ride.Status.COMPLETED) {
             throw new IllegalArgumentException("Transaction Blocked: This trip has already been completed.");
         }
@@ -208,20 +233,25 @@ public class RideService {
         rd.setStatus(Ride.Status.COMPLETED);
         rideRepo.save(rd);
 
-        // Fetch all matching onboarded passengers assigned to this exact parent ride
         List<Booking> books = repoBook.findByRideAndStatus(rd, Booking.Status.ONBOARDED);
 
         for (Booking rides : books) {
             rides.setStatus(Booking.Status.COMPLETED);
             repoBook.save(rides);
+
+            // 🚀 RESTORED: Asynchronous fare statement push to every individual passenger
+            notificationHub.sendRedisNotification(
+                    rides.getPassenger(),
+                    "RIDE_COMPLETED",
+                    "Arrived at Destination! 🏁",
+                    "Thank you for traveling with us. Your fare total was ₹" + rides.getTotalPaid(),
+                    Map.of("fareCollected", rides.getTotalPaid())
+            );
         }
 
         return "Ride lifecycle closed safely down into deep archival rows.";
     }
 
-    // =====================================================================
-    // HISTORICAL LEDGER READ ENGINES
-    // =====================================================================
     @Transactional(readOnly = true)
     public List<bookingDTO> bookings(UUID owner) {
         List<Ride.Status> statuses = List.of(Ride.Status.CREATED, Ride.Status.ACTIVE, Ride.Status.CANCELLED, Ride.Status.COMPLETED);

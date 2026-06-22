@@ -4,6 +4,7 @@ import com.spring.smr.dto.*;
 import com.spring.smr.service.Authservice;
 import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
+import java.util.*;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -60,10 +61,17 @@ public class Authcontroller {
             @ModelAttribute @Valid ProfileDTO profileDto,
             @RequestParam("file") MultipartFile profilePicFile
     ) {
-        UUID verifiedUserId = UUID.fromString(currentUser.getUsername());
-        String serviceOutcome = auth.isCompleted(verifiedUserId, profileDto, profilePicFile);
+        // Alternative fix inside Authcontroller.java (If you want email to remain the subject)
+        String verifiedUserEmail = currentUser.getUsername(); // 🎯 No UUID parsing here!nag
+        String serviceOutcome = auth.isCompleted(verifiedUserEmail, profileDto, profilePicFile);
         return ResponseEntity.status(HttpStatus.OK).body(serviceOutcome);
     }
-
+@GetMapping("/users/{id}/embedding")
+    public ResponseEntity<List<Double>> getPassengerFaceEmbedding(@PathVariable("id") UUID id) {
+        // 🎯 Note: If you shifted your Auth Service database lookup entirely to a String email pattern, 
+        // you can change the parameter to 'String email' or keep UUID depending on what your service layer uses.
+        List<Double> vectorList = auth.getUserEmbedding(id); 
+        return ResponseEntity.ok(vectorList);
+    }
     
 }
