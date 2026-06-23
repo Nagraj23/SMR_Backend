@@ -7,11 +7,13 @@ import com.smr.ride.dto.bookingDTO;
 import com.smr.ride.service.RideService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -50,18 +52,14 @@ public class RideController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("/start/{bookingId}")
-    public ResponseEntity<String> startride(
+    @PostMapping(value = "/start/{bookingId}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> verifyTripNode(
             @PathVariable("bookingId") UUID bookingId,
-            @RequestParam("file") MultipartFile file
+            @RequestParam("type") String userType, // DRIVER or PASSENGER
+            @RequestParam("file") MultipartFile facePicFile
     ) {
-        try {
-            // Fixed service hook inside your refactored biometric checkpoint
-            String verifyRes = rideService.startRideWithBiometrics(bookingId, file);
-            return ResponseEntity.ok(verifyRes);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(e.getMessage());
-        }
+        String outcomeCode = rideService.verifyIndividualNode(bookingId, userType, facePicFile);
+        return ResponseEntity.ok(Map.of("status", outcomeCode));
     }
 
     @PutMapping("/{rideId}/complete")

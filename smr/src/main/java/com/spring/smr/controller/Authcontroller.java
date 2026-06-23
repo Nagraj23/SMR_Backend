@@ -13,8 +13,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.UUID;
-
 @RestController
 @AllArgsConstructor
 @RequestMapping("/api/auth")
@@ -68,10 +66,8 @@ public class Authcontroller {
     }
 @GetMapping("/users/{id}/embedding")
     public ResponseEntity<List<Double>> getPassengerFaceEmbedding(@PathVariable("id") UUID id) {
-        // 🎯 Note: If you shifted your Auth Service database lookup entirely to a String email pattern, 
-        // you can change the parameter to 'String email' or keep UUID depending on what your service layer uses.
-        List<Double> vectorList = auth.getUserEmbedding(id); 
+        // Calls our aligned primary database key lookup method
+        List<Double> vectorList = auth.getUserEmbeddingById(id); 
         return ResponseEntity.ok(vectorList);
     }
-    
 }

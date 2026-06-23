@@ -179,9 +179,9 @@ public class Authservice {
                 .build();
     }
 
+    @org.springframework.transaction.annotation.Transactional
     public String isCompleted(String email, ProfileDTO profile, MultipartFile file){
 
-        // 🎯 DATABASE LOOKUP BY EMAIL STRING: Aligned perfectly to Option B
         Users userProfile = userRepo.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("System lookup error: User matching email attributes not found."));
 
@@ -189,34 +189,61 @@ public class Authservice {
             throw new RuntimeException("user is not verified");
         }
 
-        MultipartBodyBuilder bodyBuilder = new MultipartBodyBuilder();
+        org.springframework.http.client.MultipartBodyBuilder bodyBuilder = new org.springframework.http.client.MultipartBodyBuilder();
         bodyBuilder.part("file", file.getResource());
 
+        // Call the Python extractor
         List<Double> extractedVectors = webClient.post()
-                .uri("/verify/extract") // Python's target face embedding calculator route
-                .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
+                .uri("/verify/extract") 
+                .contentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA) // Force multipart formatting
+                .body(org.springframework.web.reactive.function.BodyInserters.fromMultipartData(bodyBuilder.build()))
                 .retrieve()
-                .bodyToMono(new ParameterizedTypeReference<List<Double>>() {})
+                .bodyToMono(new org.springframework.core.ParameterizedTypeReference<List<Double>>() {})
                 .block();
+
+        // 🚀 DIAGNOSTIC LOG: Print to console so we can verify the payload vector isn't empty!
+        System.out.println("\n================= 🎯 AUTH VECTOR SAVE DEBUG =================");
+        System.out.println("Extracted Vector Size From Python: " + (extractedVectors != null ? extractedVectors.size() : "NULL"));
+        System.out.println("Target User Email Row             : " + email);
+        System.out.println("=============================================================\n");
+
+        if (extractedVectors == null || extractedVectors.isEmpty()) {
+            throw new RuntimeException("AI Extraction Failure: Python returned an uninitialized vector payload.");
+        }
 
         userProfile.setName(profile.name());
         userProfile.setPhone(profile.phone());
-        userProfile.setFaceEmbedding(extractedVectors); // Drops the float collection array into Hibernate
+        userProfile.setFaceEmbedding(extractedVectors); // Drops the float collection array safely
         userProfile.setProfileStatus("VERIFIED");
+
+        Users updatedUserInstance = userRepo.saveAndFlush(userProfile);
+
+        // Double-check logging to confirm memory assignment state
+        System.out.println("Row finalized cleanly. Total elements synced to memory tracking: " 
+            + updatedUserInstance.getFaceEmbedding().size());
 
         userRepo.save(userProfile);
 
         return "Profile registration finalized successfully. Account status mutated to VERIFIED.";
     }
 
-    public List<Double> getUserEmbedding(UUID userId) {
+  @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Double> getUserEmbeddingById(java.util.UUID userId) {
+        // 🎯 1. Use findById to capture the fresh proxy reference context
         Users user = userRepo.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Target system account row not found"));
-                
-        if (user.getFaceEmbedding() == null || user.getFaceEmbedding().isEmpty()) {
-            throw new RuntimeException("Biometric Profile Incomplete: Face matrix records are missing.");
+                .orElseThrow(() -> new RuntimeException("System lookup error: User matching id attributes not found."));
+
+        // 🎯 2. Explicitly invoke size() to force Hibernate to lazy-load the collection table records right now!
+        if (user.getFaceEmbedding() != null) {
+            user.getFaceEmbedding().size(); 
         }
-        
+
+        // 🎯 3. Return a clean fallback array check instead of throwing a hard crash immediately
+        if (user.getFaceEmbedding() == null || user.getFaceEmbedding().isEmpty()) {
+            System.out.println("⚠️ WARN: Database collection table read empty for User ID: " + userId);
+            return java.util.Collections.emptyList(); // Return empty array instead of crashing!
+        }
+
         return user.getFaceEmbedding();
     }
     

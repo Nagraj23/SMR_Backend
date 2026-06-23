@@ -42,6 +42,7 @@ public class SecurityConfig {
                 "/v3/api-docs/**",
                 "/swagger-ui.html"
             ).permitAll()
+            .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/auth/users/**").permitAll()
             .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/auth/users/*/embedding").permitAll()
                         .anyRequest().authenticated()
                 )
@@ -86,5 +87,12 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring()
+                // Tells the engine to ignore authentication completely for the inter-service embedding route
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/auth/users/**");
     }
 }

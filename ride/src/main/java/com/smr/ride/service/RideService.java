@@ -161,34 +161,33 @@ public class RideService {
     }
 
     @Transactional
-    public String startRideWithBiometrics(UUID bookingId, MultipartFile file) {
+    public String verifyIndividualNode(UUID bookingId, String userType, MultipartFile file) {
         Booking rd = repoBook.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Ride booking ledger entry not found"));
 
-        UUID passenger = rd.getPassenger();
-        Ride parentRide = rd.getRide();
+        // 🎯 1. Dynamically isolate target user ID
+        UUID targetUserId = "DRIVER".equalsIgnoreCase(userType) ? rd.getRide().getDriver() : rd.getPassenger();
 
-        if (rd.getStatus() == Booking.Status.CANCELLED || rd.getStatus() == Booking.Status.REJECTED) {
-            throw new RuntimeException("Onboarding Aborted: This booking reference is invalid or cancelled.");
+        // 🚨 NULL GUARD LAYER: Catches any bad entity maps before hitting the network pipeline
+        if (targetUserId == null) {
+            throw new IllegalStateException("System Mismatch Error: " + userType + "_id resolved to null from database mapping.");
         }
 
-        if (Ride.Status.CANCELLED.equals(parentRide.getStatus())) {
-            throw new RuntimeException("Onboarding Aborted: The parent trip has been cancelled by the driver.");
-        }
-
+        // 🎯 2. Fetch the target's stored embedding vector from Auth Service
         List<Double> storedEmbedding = webClient.mutate()
-                .baseUrl("http://localhost:8081") // 1️⃣ Overrides base URL to point to Java Auth Service
+                .baseUrl("http://localhost:8081")
                 .build()
-                .get()                            // 2️⃣ Declares an HTTP GET Request method
-                .uri("/api/auth/users/" + passenger + "/embedding") // 3️⃣ Suffixes the REST endpoint path
+                .get()
+                .uri("/api/auth/users/" + targetUserId + "/embedding") // Will correctly receive the valid UUID string now!
                 .retrieve()
                 .bodyToMono(new org.springframework.core.ParameterizedTypeReference<List<Double>>() {})
-                .block();                         // 4️⃣ Synchronously blocks the thread until the array list drops back
+                .block();
 
         String vectorParameterString = storedEmbedding.stream()
                 .map(String::valueOf)
                 .collect(Collectors.joining(","));
 
+        // 3. Stream payloads to python face engine
         org.springframework.http.client.MultipartBodyBuilder bodyBuilder = new org.springframework.http.client.MultipartBodyBuilder();
         bodyBuilder.part("file", file.getResource());
         bodyBuilder.part("stored_vector_string", vectorParameterString);
@@ -201,24 +200,35 @@ public class RideService {
                 .block();
 
         Boolean isMatch = (Boolean) pythonResponse.get("is_match");
-
         if (isMatch == null || !isMatch) {
-            throw new RuntimeException("Biometric Verification Rejected: Security breach alert! Criminal spoofing blocked.");
+            throw new RuntimeException("Biometric Mismatch: " + userType + " authentication rejected.");
         }
 
-        rd.setStatus(Booking.Status.ONBOARDED);
+        // 🎯 4. Mutate node verify states
+        if ("DRIVER".equalsIgnoreCase(userType)) {
+            rd.setDriverVerified(true);
+        } else {
+            rd.setPassengerVerified(true);
+        }
+
+        // 🎯 5. Complete peer-to-peer circle check
+        if (rd.isDriverVerified() && rd.isPassengerVerified()) {
+            rd.setStatus(Booking.Status.ONBOARDED);
+            repoBook.save(rd);
+
+            notificationHub.sendRedisNotification(
+                    rd.getPassenger(),
+                    "RIDE_STARTED",
+                    "BIOMETRIC_ONBOARD_SUCCESS",
+                    "Your node identity verified. Welcome on board!",
+                    Map.of("rideId", rd.getRide().getId().toString(), "bookingId", bookingId.toString())
+            );
+
+            return "MUTUAL_ONBOARDING_COMPLETE";
+        }
+
         repoBook.save(rd);
-
-        // 🚀 RESTORED: Onboarding alert trigger
-        notificationHub.sendRedisNotification(
-                passenger,
-                "RIDE_STARTED",
-                "Trip Started Safely 🏍️",
-                "Biometrics validated successfully. Your ride is currently active.",
-                Map.of("rideId", parentRide.getId().toString())
-        );
-
-        return "Biometric matching passed. Passenger verified and onboarded successfully.";
+        return "NODE_VERIFIED_AWAITING_PEER";
     }
 
     @Transactional
