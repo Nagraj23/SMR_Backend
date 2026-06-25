@@ -5,9 +5,11 @@ import com.smr.ride.dto.RidecreateDTO;
 import com.smr.ride.dto.RideResponseDTO;
 import com.smr.ride.dto.bookingDTO;
 import com.smr.ride.entity.Booking;
+import com.smr.ride.entity.Payment;
 import com.smr.ride.entity.Ride;
 import com.smr.ride.repo.BookingRepository;
 import com.smr.ride.repo.RideRepository;
+import com.smr.ride.repo.PaymentRepository; // 🎯 FIXED: Imported repository layer
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,15 +28,22 @@ public class RideService {
     private final RideRepository rideRepo;
     private final BookingRepository repoBook;
     private final WebClient webClient;
-    private final NotificationHubService notificationHub; // 🎯 Clean decoupled layer dependency
+    private final PaymentService payment;
+    private final NotificationHubService notificationHub;
+    private final PaymentRepository paymentRepository; // 🎯 FIXED: Declared mapping dependency hook
 
-    // Constructor casing fixed with lower w, upper C, and notificationHub mapped
-    public RideService(RideRepository rideRepo, BookingRepository repoBook,
-                       WebClient webClient, NotificationHubService notificationHub) {
+    public RideService(RideRepository rideRepo,
+                       BookingRepository repoBook,
+                       WebClient webClient,
+                       NotificationHubService notificationHub,
+                       PaymentService payment,
+                       PaymentRepository paymentRepository) { // 🎯 FIXED: Dependency Injected completely
         this.rideRepo = rideRepo;
         this.repoBook = repoBook;
         this.webClient = webClient;
         this.notificationHub = notificationHub;
+        this.payment = payment;
+        this.paymentRepository = paymentRepository;
     }
 
     @Transactional
@@ -93,7 +102,6 @@ public class RideService {
 
         repoBook.save(book);
 
-        // 🚀 RESTORED: Asynchronous Redis notification dispatch to driver
         notificationHub.sendRedisNotification(
                 rd.getDriver(),
                 "BOOKING_REQUEST",
@@ -120,7 +128,6 @@ public class RideService {
             book.setStatus(Booking.Status.REJECTED);
             repoBook.save(book);
 
-            // 🚀 RESTORED: Asynchronous notification to passenger on reject
             notificationHub.sendRedisNotification(
                     book.getPassenger(),
                     "BOOKING_REJECTED",
@@ -148,7 +155,6 @@ public class RideService {
         repoBook.save(book);
         rideRepo.save(rd);
 
-        // 🚀 RESTORED: Asynchronous notification to passenger on accept
         notificationHub.sendRedisNotification(
                 book.getPassenger(),
                 "BOOKING_ACCEPTED",
@@ -165,20 +171,17 @@ public class RideService {
         Booking rd = repoBook.findById(bookingId)
                 .orElseThrow(() -> new RuntimeException("Ride booking ledger entry not found"));
 
-        // 🎯 1. Dynamically isolate target user ID
         UUID targetUserId = "DRIVER".equalsIgnoreCase(userType) ? rd.getRide().getDriver() : rd.getPassenger();
 
-        // 🚨 NULL GUARD LAYER: Catches any bad entity maps before hitting the network pipeline
         if (targetUserId == null) {
             throw new IllegalStateException("System Mismatch Error: " + userType + "_id resolved to null from database mapping.");
         }
 
-        // 🎯 2. Fetch the target's stored embedding vector from Auth Service
         List<Double> storedEmbedding = webClient.mutate()
                 .baseUrl("http://localhost:8081")
                 .build()
                 .get()
-                .uri("/api/auth/users/" + targetUserId + "/embedding") // Will correctly receive the valid UUID string now!
+                .uri("/api/auth/users/" + targetUserId + "/embedding")
                 .retrieve()
                 .bodyToMono(new org.springframework.core.ParameterizedTypeReference<List<Double>>() {})
                 .block();
@@ -187,7 +190,6 @@ public class RideService {
                 .map(String::valueOf)
                 .collect(Collectors.joining(","));
 
-        // 3. Stream payloads to python face engine
         org.springframework.http.client.MultipartBodyBuilder bodyBuilder = new org.springframework.http.client.MultipartBodyBuilder();
         bodyBuilder.part("file", file.getResource());
         bodyBuilder.part("stored_vector_string", vectorParameterString);
@@ -204,14 +206,12 @@ public class RideService {
             throw new RuntimeException("Biometric Mismatch: " + userType + " authentication rejected.");
         }
 
-        // 🎯 4. Mutate node verify states
         if ("DRIVER".equalsIgnoreCase(userType)) {
             rd.setDriverVerified(true);
         } else {
             rd.setPassengerVerified(true);
         }
 
-        // 🎯 5. Complete peer-to-peer circle check
         if (rd.isDriverVerified() && rd.isPassengerVerified()) {
             rd.setStatus(Booking.Status.ONBOARDED);
             repoBook.save(rd);
@@ -232,7 +232,7 @@ public class RideService {
     }
 
     @Transactional
-    public String completebook(UUID rideId) {
+    public Map<String, String> completebook(UUID rideId, double actualDrivenKm, int actualDurationMins, String preferredMode) {
         Ride rd = rideRepo.findById(rideId)
                 .orElseThrow(() -> new IllegalArgumentException("Target operational route not found"));
 
@@ -240,26 +240,81 @@ public class RideService {
             throw new IllegalArgumentException("Transaction Blocked: This trip has already been completed.");
         }
 
-        rd.setStatus(Ride.Status.COMPLETED);
+        java.math.BigDecimal finalizedFare;
+
+        if (rd.isDeviationThresholdExceeded()) {
+            java.math.BigDecimal kmCost = java.math.BigDecimal.valueOf(actualDrivenKm).multiply(new java.math.BigDecimal("12.50"));
+            java.math.BigDecimal minCost = java.math.BigDecimal.valueOf(actualDurationMins).multiply(new java.math.BigDecimal("2.00"));
+            finalizedFare = new java.math.BigDecimal("50.00").add(kmCost).add(minCost);
+        } else {
+            finalizedFare = java.math.BigDecimal.valueOf(rd.getSeatFare());
+        }
+
+        rd.setStatus(Ride.Status.AWAITING_SETTLEMENT);
         rideRepo.save(rd);
 
         List<Booking> books = repoBook.findByRideAndStatus(rd, Booking.Status.ONBOARDED);
 
-        for (Booking rides : books) {
-            rides.setStatus(Booking.Status.COMPLETED);
-            repoBook.save(rides);
+        com.smr.ride.entity.Payment.PaymentMode mode = "NETBANKING".equalsIgnoreCase(preferredMode) ?
+                com.smr.ride.entity.Payment.PaymentMode.NETBANKING : com.smr.ride.entity.Payment.PaymentMode.COD;
 
-            // 🚀 RESTORED: Asynchronous fare statement push to every individual passenger
+        for (Booking booking : books) {
+            if (rd.isDeviationThresholdExceeded()) {
+                booking.setTotalPaid(finalizedFare.doubleValue() * booking.getSeatsBooked());
+                repoBook.save(booking);
+            }
+
+            payment.createPendingPayment(
+                    rd.getId(),
+                    booking.getPassenger(),
+                    java.math.BigDecimal.valueOf(booking.getTotalPaid()),
+                    mode
+            );
+
             notificationHub.sendRedisNotification(
-                    rides.getPassenger(),
-                    "RIDE_COMPLETED",
+                    booking.getPassenger(),
+                    "PAYMENT_DUE",
                     "Arrived at Destination! 🏁",
-                    "Thank you for traveling with us. Your fare total was ₹" + rides.getTotalPaid(),
-                    Map.of("fareCollected", rides.getTotalPaid())
+                    "Please settle your balance of ₹" + booking.getTotalPaid() + " via " + mode.name(),
+                    Map.of("rideId", rideId.toString(), "amount", String.valueOf(booking.getTotalPaid()))
             );
         }
 
-        return "Ride lifecycle closed safely down into deep archival rows.";
+        return Map.of("status", "AWAITING_SETTLEMENT", "finalFarePerSeat", finalizedFare.toString());
+    }
+
+    /**
+     * 🏁 Phase B Closeout Engine
+     */
+    @Transactional
+    public String settleAndCloseRide(UUID rideId) {
+        Ride rd = rideRepo.findById(rideId)
+                .orElseThrow(() -> new IllegalArgumentException("Target transaction record missing"));
+
+        if (rd.getStatus() != Ride.Status.AWAITING_SETTLEMENT) {
+            throw new IllegalStateException("Ride is not actively waiting for financial settlement!");
+        }
+
+        payment.settlePaymentLocally(rideId);
+
+        rd.setStatus(Ride.Status.COMPLETED);
+        rideRepo.save(rd);
+
+        List<Booking> books = repoBook.findByRideAndStatus(rd, Booking.Status.ONBOARDED);
+        for (Booking booking : books) {
+            booking.setStatus(Booking.Status.COMPLETED);
+            repoBook.save(booking);
+
+            notificationHub.sendRedisNotification(
+                    booking.getPassenger(),
+                    "RIDE_COMPLETED",
+                    "Payment Confirmed! Clean Receipt Issued",
+                    "Thank you for riding with us! Your transaction has cleared successfully.",
+                    null
+            );
+        }
+
+        return "Solapur ride finalized cleanly, bro!";
     }
 
     @Transactional(readOnly = true)
@@ -310,5 +365,11 @@ public class RideService {
 
         history.sort((a, b) -> b.getDepartureTime().compareTo(a.getDepartureTime()));
         return history;
+    }
+
+    public UUID findRideIdByRazorpayOrder(String orderId) {
+        return paymentRepository.findByRazorpayOrderId(orderId)
+                .map(Payment::getRideId)
+                .orElseThrow(() -> new RuntimeException("No active trip match found for order token: " + orderId));
     }
 }

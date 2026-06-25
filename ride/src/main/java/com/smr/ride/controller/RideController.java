@@ -37,7 +37,6 @@ public class RideController {
             @PathVariable("rideId") UUID rideId,
             @Valid @RequestBody RideBookRequestDTO rdbook
     ) {
-        // Invokes your updated decoupled request transaction ledger loop
         String response = rideService.requestbook(rdbook, rideId);
         return ResponseEntity.ok(response);
     }
@@ -47,7 +46,6 @@ public class RideController {
             @PathVariable("bookingId") UUID bookingId,
             @RequestParam("accept") boolean accept
     ) {
-        // Driver passes ?accept=true or ?accept=false query parameters inside Postman
         String response = rideService.responsebook(bookingId, accept);
         return ResponseEntity.ok(response);
     }
@@ -62,11 +60,29 @@ public class RideController {
         return ResponseEntity.ok(Map.of("status", outcomeCode));
     }
 
+    /**
+     * 🏁 Phase A: Trigger ride end, evaluate route contract metrics, and lock fare session.
+     * Expects query params for actual journey calculations and payment preferences.
+     */
     @PutMapping("/{rideId}/complete")
-    public ResponseEntity<String> completeRide(@PathVariable("rideId") UUID rideId) {
-        // Progresses parent trip and all matched 'ONBOARDED' tickets to 'COMPLETED'
-        String response = rideService.completebook(rideId);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<Map<String, String>> completeRide(
+            @PathVariable("rideId") UUID rideId,
+            @RequestParam("actualKm") double actualKm,
+            @RequestParam("actualMins") int actualMins,
+            @RequestParam("mode") String preferredMode // COD or NETBANKING
+    ) {
+        Map<String, String> settlementStatus = rideService.completebook(rideId, actualKm, actualMins, preferredMode);
+        return ResponseEntity.ok(settlementStatus);
+    }
+
+    /**
+     * 💰 Phase B: Confirms final payment reception and closes the full trip workflow.
+     * Used directly for Driver Cash click confirmations or local test simulation flows.
+     */
+    @PostMapping("/{rideId}/settle-cash")
+    public ResponseEntity<String> settleCashVerification(@PathVariable("rideId") UUID rideId) {
+        String baseArchivalOutcome = rideService.settleAndCloseRide(rideId);
+        return ResponseEntity.ok(baseArchivalOutcome);
     }
 
     @GetMapping("/bookings/{user}")

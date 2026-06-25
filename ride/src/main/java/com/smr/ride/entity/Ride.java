@@ -53,12 +53,15 @@ public class Ride {
     @Column(nullable = false)
     private Status status;
 
+    @Column(name = "deviation_threshold_exceeded", nullable = false)
+    private boolean deviationThresholdExceeded = false;
 
     public enum Status {
         CREATED,
         ACTIVE,
         COMPLETED,
         CANCELLED,
-        PENDING
+        PENDING,
+        AWAITING_SETTLEMENT
     }
 }
