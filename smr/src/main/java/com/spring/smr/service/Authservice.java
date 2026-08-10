@@ -2,6 +2,7 @@ package com.spring.smr.service;
 
 import com.spring.smr.Security.EmailService;
 import com.spring.smr.Security.JwtProvider;
+import com.spring.smr.Security.*;
 import com.spring.smr.dto.AuthResponse;
 import com.spring.smr.dto.LoginDTO;
 import com.spring.smr.dto.ProfileDTO;
@@ -31,6 +32,7 @@ public class Authservice {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
     private final JwtProvider jwtProvider;
+    private final JWTservice jwtService;
     private final WebClient webClient;
 
     private final Map<String, Boolean> otpVerifiedForReset = new ConcurrentHashMap<>();
@@ -125,7 +127,11 @@ public class Authservice {
             throw new RuntimeException("Invalid email or password credentials!");
         }
 
-        String token = jwtProvider.generateToken(exist.getUser_id(), exist.getEmail(), exist.getName());
+        String token = jwtService.generateToken(
+                exist.getEmail(),
+                exist.getUser_id(),
+                exist.getName()
+        );
 
         return AuthResponse.builder()
                 .id(exist.getUser_id())
@@ -169,7 +175,11 @@ public class Authservice {
         otpStore.remove(email);
         otpExpiry.remove(email);
 
-       String token = jwtProvider.generateToken(user.getUser_id(), user.getEmail(), user.getName());
+       String token = jwtService.generateToken(
+               user.getEmail(),
+               user.getUser_id(),
+               user.getName()
+       );
 
         return AuthResponse.builder()
                 .id(user.getUser_id())
