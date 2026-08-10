@@ -31,3 +31,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# JWT / cryptographic keys
+
+**/Keys/.key
+**/keys/.key
