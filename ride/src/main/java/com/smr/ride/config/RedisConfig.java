@@ -15,8 +15,6 @@ public class RedisConfig {
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
-
-        // Enforcing plain strings for channel routes and JSON structures for alert messages
         template.setKeySerializer(new StringRedisSerializer());
         template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
         return template;
@@ -24,6 +22,6 @@ public class RedisConfig {
 
     @Bean
     public ChannelTopic rideTopic() {
-        return new ChannelTopic("ride:lifecycle:events"); // Unified real-time communication pipeline
+        return new ChannelTopic("ride:lifecycle:events");
     }
 }

@@ -72,10 +72,7 @@ public class SecurityConfig {
                     .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
 
             // 2. Adapt and map it straight into Spring Security's native model class type
-            return org.springframework.security.core.userdetails.User.builder()
-                    .username(domainUser.getEmail())
-                    .password(domainUser.getPassword()) // Automatically prepends "ROLE_"
-                    .build();
+            return new CustomUserDetails(domainUser);
         };
     }
 

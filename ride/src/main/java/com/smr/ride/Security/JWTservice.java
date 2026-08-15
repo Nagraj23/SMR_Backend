@@ -1,5 +1,5 @@
 
-package com.spring.smr.Security;
+package com.smr.ride.Security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
