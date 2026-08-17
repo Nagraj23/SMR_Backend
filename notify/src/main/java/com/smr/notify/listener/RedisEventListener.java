@@ -10,6 +10,7 @@ import org.springframework.data.redis.connection.MessageListener;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 
+import java.nio.charset.StandardCharsets;
 
 @Component
 @Slf4j
@@ -21,14 +22,19 @@ public class RedisEventListener implements MessageListener {
 
     @Override
     public void onMessage(Message message, byte @Nullable [] pattern) {
+        String rawBody = new String(message.getBody(), StandardCharsets.UTF_8);
 
-        String event = new String(message.getBody());
+        try {
+            // Unwrap extra wrapping quotes if double-serialized
+            if (rawBody.startsWith("\"") && rawBody.endsWith("\"")) {
+                rawBody = objectMapper.readValue(rawBody, String.class);
+            }
 
-        try{
-        NotificationEvent notification =objectMapper.readValue(event, NotificationEvent.class);
+            NotificationEvent notification = objectMapper.readValue(rawBody, NotificationEvent.class);
             notificationService.processNotification(notification);
 
-        }catch(Exception e){
-            log.error("Failed to process Redis notification event: {}", event, e);        }
+        } catch (Exception e) {
+            log.error("Failed to process Redis notification event: {}", rawBody, e);
+        }
     }
 }

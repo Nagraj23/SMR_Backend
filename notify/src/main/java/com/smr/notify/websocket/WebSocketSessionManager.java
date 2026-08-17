@@ -25,6 +25,14 @@ public class WebSocketSessionManager {
 
         userSessions.put(userId, sessionId);
         sessionUsers.put(sessionId, userId);
+
+
+    System.out.println("=================================");
+    System.out.println("REGISTERING WEBSOCKET USER");
+    System.out.println("USER ID: " + userId);
+    System.out.println("SESSION ID: " + sessionId);
+    System.out.println("USER SESSIONS: " + userSessions);
+    System.out.println("=================================");
     }
 
 
@@ -38,16 +46,23 @@ public class WebSocketSessionManager {
     }
 
 
-    public void sendNotification(UUID userId, Object notification) {
+    public void sendNotification(
+            UUID userId,
+            Object notification) {
+         System.out.println("=================================");
+    System.out.println("SENDING WEBSOCKET NOTIFICATION");
+    System.out.println("USER ID: " + userId);
+    System.out.println("USER SESSION: " + userSessions.get(userId));
+    System.out.println("USER SESSIONS: " + userSessions);
+    System.out.println("=================================");
+    
+        if (!userSessions.containsKey(userId)) {
 
-        String sessionId = userSessions.get(userId);
-
-        if (sessionId == null) {
             return;
         }
 
         messagingTemplate.convertAndSendToUser(
-                sessionId,
+                userId.toString(),
                 "/queue/notifications",
                 notification
         );

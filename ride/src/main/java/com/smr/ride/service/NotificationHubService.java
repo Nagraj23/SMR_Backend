@@ -1,41 +1,55 @@
 package com.smr.ride.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smr.ride.dto.NotificationEvent;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import java.util.HashMap;
+
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class NotificationHubService {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final ChannelTopic rideTopic;
+    private final ObjectMapper objectMapper;
 
-    public NotificationHubService(RedisTemplate<String, Object> redisTemplate, ChannelTopic rideTopic) {
-        this.redisTemplate = redisTemplate;
-        this.rideTopic = rideTopic;
-    }
+    @Async("notificationExecutor")
+    public void sendRedisNotification(
+            UUID senderId,
+            UUID recipientUserId,
+            String type,
+            Map<String, Object> extraData) {
 
-    @Async("notificationExecutor") // 🚀 Executes completely on background workers, never slowing down the database!
-    public void sendRedisNotification(UUID recipientUserId, String type, String title, String body, Map<String, Object> extraData) {
-        System.out.println("📳 [THREAD: " + Thread.currentThread().getName() + "] Stream dispatching on Redis...");
+        try {
+            NotificationEvent event = NotificationEvent.builder()
+                    .notificationId(UUID.randomUUID())
+                    .senderId(senderId)
+                    .receiverId(recipientUserId)
+                    .type(type)
+                    .payload(extraData != null ? extraData : Map.of())
+                    .timestamp(Instant.now())
+                    .build();
 
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("recipientId", recipientUserId != null ? recipientUserId.toString() : "BROADCAST");
-        payload.put("type", type); // BOOKING_REQUEST, BOOKING_ACCEPTED, RIDE_STARTED, etc.
-        payload.put("title", title);
-        payload.put("message", body);
-        payload.put("timestamp", System.currentTimeMillis());
+            // Convert to clean JSON string without @class type metadata
+            String jsonPayload = objectMapper.writeValueAsString(event);
 
-        if (extraData != null) {
-            payload.putAll(extraData);
+            System.out.println("📡 [RIDE SERVICE] Publishing event to topic [" + rideTopic.getTopic() + "]: " + jsonPayload);
+
+            redisTemplate.convertAndSend(rideTopic.getTopic(), jsonPayload);
+
+            System.out.println("✅ [RIDE SERVICE] Successfully published to Redis!");
+        } catch (Exception e) {
+            System.err.println("❌ [RIDE SERVICE] Error broadcasting Redis notification: " + e.getMessage());
+            e.printStackTrace();
         }
-
-        // Drop the payload directly down the in-memory stream pipeline
-        redisTemplate.convertAndSend(rideTopic.getTopic(), payload);
-        System.out.println("📡 [REDIS LIVE] Broadcast cleared smoothly for topic: " + rideTopic.getTopic());
     }
 }

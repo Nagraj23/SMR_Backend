@@ -9,7 +9,7 @@ import com.smr.ride.entity.Payment;
 import com.smr.ride.entity.Ride;
 import com.smr.ride.repo.BookingRepository;
 import com.smr.ride.repo.RideRepository;
-import com.smr.ride.repo.PaymentRepository; // 🎯 FIXED: Imported repository layer
+import com.smr.ride.repo.PaymentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -29,21 +29,21 @@ public class RideService {
     private final BookingRepository repoBook;
     private final WebClient webClient;
     private final PaymentService payment;
-    private final NotificationHubService notificationHub;
-    private final PaymentRepository paymentRepository; // 🎯 FIXED: Declared mapping dependency hook
+    private final PaymentRepository paymentRepository;
+    private final NotificationHubService notificationHub; // 🎯 INJECTED
 
     public RideService(RideRepository rideRepo,
                        BookingRepository repoBook,
                        WebClient webClient,
-                       NotificationHubService notificationHub,
                        PaymentService payment,
-                       PaymentRepository paymentRepository) { // 🎯 FIXED: Dependency Injected completely
+                       PaymentRepository paymentRepository,
+                       NotificationHubService notificationHub) {
         this.rideRepo = rideRepo;
         this.repoBook = repoBook;
         this.webClient = webClient;
-        this.notificationHub = notificationHub;
         this.payment = payment;
         this.paymentRepository = paymentRepository;
+        this.notificationHub = notificationHub;
     }
 
     @Transactional
@@ -102,12 +102,16 @@ public class RideService {
 
         repoBook.save(book);
 
+        // 🎯 TRIGGER NOTIFICATION TO DRIVER
         notificationHub.sendRedisNotification(
+                dto.passengerId(),
                 rd.getDriver(),
                 "BOOKING_REQUEST",
-                "New Ride Request! 🎯",
-                "A passenger wants to book " + dto.seatsToBook() + " seat(s) on your route.",
-                Map.of("bookingId", book.getId().toString(), "rideId", rideId.toString())
+                Map.of(
+                        "bookingId", book.getId().toString(),
+                        "rideId", rd.getId().toString(),
+                        "seatsBooked", book.getSeatsBooked()
+                )
         );
 
         return "Booking request submitted successfully! Awaiting response from driver.";
@@ -128,12 +132,12 @@ public class RideService {
             book.setStatus(Booking.Status.REJECTED);
             repoBook.save(book);
 
+            // 🎯 NOTIFY PASSENGER (REJECTED)
             notificationHub.sendRedisNotification(
+                    rd.getDriver(),
                     book.getPassenger(),
                     "BOOKING_REJECTED",
-                    "Request Update ❌",
-                    "The driver was unable to accept your request.",
-                    null
+                    Map.of("rideId", rd.getId().toString())
             );
 
             return "Booking request successfully rejected. Passenger has been notified.";
@@ -155,12 +159,15 @@ public class RideService {
         repoBook.save(book);
         rideRepo.save(rd);
 
+        // 🎯 NOTIFY PASSENGER (ACCEPTED)
         notificationHub.sendRedisNotification(
+                rd.getDriver(),
                 book.getPassenger(),
                 "BOOKING_ACCEPTED",
-                "Ride Confirmed! 🎉",
-                "Your driver has approved the booking request! Meet at the pickup location.",
-                Map.of("rideId", rd.getId().toString(), "updatedSeats", rd.getSeats())
+                Map.of(
+                        "rideId", rd.getId().toString(),
+                        "remainingSeats", rd.getSeats()
+                )
         );
 
         return "Passenger successfully confirmed on your route manifest ledger.";
@@ -216,12 +223,12 @@ public class RideService {
             rd.setStatus(Booking.Status.ONBOARDED);
             repoBook.save(rd);
 
+            // 🎯 NOTIFY PASSENGER (TRIP STARTED)
             notificationHub.sendRedisNotification(
+                    rd.getRide().getDriver(),
                     rd.getPassenger(),
                     "RIDE_STARTED",
-                    "BIOMETRIC_ONBOARD_SUCCESS",
-                    "Your node identity verified. Welcome on board!",
-                    Map.of("rideId", rd.getRide().getId().toString(), "bookingId", bookingId.toString())
+                    Map.of("rideId", rd.getRide().getId().toString())
             );
 
             return "MUTUAL_ONBOARDING_COMPLETE";
@@ -271,21 +278,22 @@ public class RideService {
                     mode
             );
 
+            // 🎯 NOTIFY PASSENGER (PAYMENT DUE)
             notificationHub.sendRedisNotification(
+                    rd.getDriver(),
                     booking.getPassenger(),
                     "PAYMENT_DUE",
-                    "Arrived at Destination! 🏁",
-                    "Please settle your balance of ₹" + booking.getTotalPaid() + " via " + mode.name(),
-                    Map.of("rideId", rideId.toString(), "amount", String.valueOf(booking.getTotalPaid()))
+                    Map.of(
+                            "rideId", rd.getId().toString(),
+                            "amount", booking.getTotalPaid(),
+                            "paymentMode", mode.name()
+                    )
             );
         }
 
         return Map.of("status", "AWAITING_SETTLEMENT", "finalFarePerSeat", finalizedFare.toString());
     }
 
-    /**
-     * 🏁 Phase B Closeout Engine
-     */
     @Transactional
     public String settleAndCloseRide(UUID rideId) {
         Ride rd = rideRepo.findById(rideId)
@@ -305,12 +313,12 @@ public class RideService {
             booking.setStatus(Booking.Status.COMPLETED);
             repoBook.save(booking);
 
+            // 🎯 NOTIFY PASSENGER (COMPLETED)
             notificationHub.sendRedisNotification(
+                    rd.getDriver(),
                     booking.getPassenger(),
                     "RIDE_COMPLETED",
-                    "Payment Confirmed! Clean Receipt Issued",
-                    "Thank you for riding with us! Your transaction has cleared successfully.",
-                    null
+                    Map.of("rideId", rd.getId().toString())
             );
         }
 
