@@ -1,0 +1,257 @@
+{
+  "info": {
+    "name": "SMR (Smart Mobility Ride) - Complete API Tests",
+    "description": "Complete API test suite for SMR Authentication and Vehicle Management",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:8081",
+      "type": "default"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "email",
+      "value": "",
+      "type": "default"
+    },
+    {
+      "key": "otp",
+      "value": "",
+      "type": "default"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. REGISTER USER",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mail\": \"user@example.com\",\n  \"password\": \"SecurePassword123!\",\n  \"name\": \"John Doe\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/api/auth/register",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "auth", "register"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    var jsonData = pm.response.json();",
+              "    pm.globals.set('user_id', jsonData.id);",
+              "    pm.globals.set('email', jsonData.mail);",
+              "    console.log('✅ User ID saved: ' + jsonData.id);",
+              "    console.log('✅ Email saved: ' + jsonData.mail);",
+              "    console.log('⏳ Please check application console for OTP');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. VERIFY OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"otp\": \"1234\",\n  \"type\": \"VERIFICATION\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/api/auth/verify",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "auth", "verify"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var jsonData = pm.response.json();",
+              "    pm.globals.set('jwt_token', jsonData.token);",
+              "    console.log('✅ JWT Token saved successfully');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. COMPLETE USER PROFILE",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}"
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "name",
+              "value": "John Doe",
+              "type": "text"
+            },
+            {
+              "key": "phone",
+              "value": "+14155552671",
+              "type": "text"
+            },
+            {
+              "key": "file",
+              "type": "file",
+              "src": []
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/api/auth/profile/complete",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "auth", "profile", "complete"]
+        }
+      }
+    },
+    {
+      "name": "4. LOGIN",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"mail\": \"user@example.com\",\n  \"password\": \"SecurePassword123!\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/api/auth/login",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "auth", "login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var jsonData = pm.response.json();",
+              "    pm.globals.set('jwt_token', jsonData.token);",
+              "    pm.globals.set('user_id', jsonData.id);",
+              "    console.log('✅ Login successful - Token saved');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. FORGOT PASSWORD",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/api/auth/forgot",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "auth", "forgot"]
+        }
+      }
+    },
+    {
+      "name": "6. RESET PASSWORD",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"pass\": \"NewPassword@456\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/api/auth/reset",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "auth", "reset"]
+        }
+      }
+    },
+    {
+      "name": "7. GET USER FACE EMBEDDING",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{BASE_URL}}/api/auth/users/{{user_id}}/embedding",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "auth", "users", "{{user_id}}", "embedding"]
+        }
+      }
+    },
+    {
+      "name": "8. ADD VEHICLE",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"model\": \"Honda Activa\",\n  \"color\": \"Black\",\n  \"licensePlateNumber\": \"DL01AB1234\"\n}"
+        },
+        "url": {
+          "raw": "{{BASE_URL}}/api/vehicles/add/{{user_id}}",
+          "host": ["{{BASE_URL}}"],
+          "path": ["api", "vehicles", "add", "{{user_id}}"]
+        }
+      }
+    }
+  ]
+}

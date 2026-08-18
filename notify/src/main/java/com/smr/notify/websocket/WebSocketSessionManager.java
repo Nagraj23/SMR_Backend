@@ -67,4 +67,8 @@ public class WebSocketSessionManager {
                 notification
         );
     }
+
+    public boolean hasActiveSession(UUID userId) {
+        return userSessions.containsKey(userId);
+    }
 }

@@ -1,0 +1,392 @@
+{
+  "info": {
+    "_postman_id": "smr-notify-collection-001",
+    "name": "SMR Notification Service - Complete Testing Suite",
+    "description": "Complete Postman collection for testing SMR Notification Service API with pre-configured mock data and WebSocket scenarios",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "📱 Device Token Registration",
+      "item": [
+        {
+          "name": "Register Token - User 1 (Rider)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"550e8400-e29b-41d4-a716-446655440001\",\n  \"fcmToken\": \"cKwpP9lZ:APA91bGhijk567890abcdefghijklmnopqrstuvwxyz\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/notify/device-token",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notify", "device-token"]
+            },
+            "description": "Register FCM device token for User 1 (Rider)\n- This allows push notifications when user is offline\n- Response: HTTP 200 (empty body)"
+          },
+          "response": []
+        },
+        {
+          "name": "Register Token - User 2 (Driver)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"550e8400-e29b-41d4-a716-446655440002\",\n  \"fcmToken\": \"dRxqQ0mA:APA91bHijkl890123abcdefghijklmnopqrstuvwxyz\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/notify/device-token",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notify", "device-token"]
+            },
+            "description": "Register FCM device token for User 2 (Driver)\n- This allows push notifications when user is offline"
+          },
+          "response": []
+        },
+        {
+          "name": "Register Token - User 3 (Support)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"550e8400-e29b-41d4-a716-446655440003\",\n  \"fcmToken\": \"eJ4t_OlO:APA91bFxyz123456789abcdefghijklmnopqrstuvwxyz\"\n}"
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/notify/device-token",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8080",
+              "path": ["api", "notify", "device-token"]
+            },
+            "description": "Register FCM device token for User 3 (Support Agent)\n- This allows push notifications when user is offline"
+          },
+          "response": []
+        }
+      ],
+      "description": "Register device tokens for test users. These tokens enable Firebase Cloud Messaging (FCM) push notifications when users are offline."
+    },
+    {
+      "name": "🧪 Test Scenarios",
+      "item": [
+        {
+          "name": "Scenario 1: Booking Request (Rider)",
+          "item": [
+            {
+              "name": "Description",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "📋 SCENARIO: New Booking Request\n\nWhen: A rider receives a new booking request\nWho: User 1 (Rider) receives from User 3 (Support)\n\nSteps:\n1. Ensure User 1 has device token registered\n2. If User 1 is online (WebSocket connected): Deliver via STOMP (instant)\n3. If User 1 is offline: Deliver via FCM push (to phone)\n\nExpected Result:\nRider receives notification about new booking with pickup/dropoff details"
+              }
+            },
+            {
+              "name": "View Notification JSON",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "{\n  \"notificationId\": \"550e8400-e29b-41d4-a716-446655440099\",\n  \"senderId\": \"550e8400-e29b-41d4-a716-446655440003\",\n  \"receiverId\": \"550e8400-e29b-41d4-a716-446655440001\",\n  \"type\": \"BOOKING_REQUEST\",\n  \"payload\": {\n    \"rideId\": \"RIDE-001\",\n    \"pickupLocation\": \"Central Station\",\n    \"dropoffLocation\": \"Airport\",\n    \"fare\": 25.50,\n    \"distance\": \"15 km\",\n    \"estimatedTime\": \"25 minutes\",\n    \"requestedTime\": \"2024-08-18T10:30:00Z\"\n  },\n  \"timestamp\": \"2024-08-18T10:30:00Z\"\n}"
+              }
+            },
+            {
+              "name": "Publish to Redis - BOOKING_REQUEST",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "🚀 REDIS COMMAND:\n\nPublish this to Redis in terminal:\n\nredis-cli PUBLISH smr:notifications '{\"notificationId\":\"550e8400-e29b-41d4-a716-446655440099\",\"senderId\":\"550e8400-e29b-41d4-a716-446655440003\",\"receiverId\":\"550e8400-e29b-41d4-a716-446655440001\",\"type\":\"BOOKING_REQUEST\",\"payload\":{\"rideId\":\"RIDE-001\",\"pickupLocation\":\"Central Station\",\"dropoffLocation\":\"Airport\",\"fare\":25.50,\"distance\":\"15 km\",\"estimatedTime\":\"25 minutes\",\"requestedTime\":\"2024-08-18T10:30:00Z\"},\"timestamp\":\"2024-08-18T10:30:00Z\"}'\n\nOr use:\nredis-cli\n> PUBLISH smr:notifications '{JSON_PAYLOAD}'"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Scenario 2: Booking Accepted (Driver)",
+          "item": [
+            {
+              "name": "Description",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "📋 SCENARIO: Booking Accepted\n\nWhen: A driver accepts a booking request\nWho: User 3 (Support) sends confirmation to User 1 (Rider)\n\nSteps:\n1. Ensure User 1 and User 3 have device tokens registered\n2. Publish BOOKING_ACCEPTED notification\n3. Check delivery method (WebSocket if online, FCM if offline)"
+              }
+            },
+            {
+              "name": "Notification JSON",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "{\n  \"notificationId\": \"550e8400-e29b-41d4-a716-446655440100\",\n  \"senderId\": \"550e8400-e29b-41d4-a716-446655440001\",\n  \"receiverId\": \"550e8400-e29b-41d4-a716-446655440003\",\n  \"type\": \"BOOKING_ACCEPTED\",\n  \"payload\": {\n    \"rideId\": \"RIDE-001\",\n    \"driverName\": \"John Smith\",\n    \"vehicleModel\": \"Toyota Prius\",\n    \"licensePlate\": \"ABC-1234\",\n    \"etaPickup\": \"5 minutes\",\n    \"driverRating\": 4.8,\n    \"driverPhone\": \"+1-555-0123\"\n  },\n  \"timestamp\": \"2024-08-18T10:35:00Z\"\n}"
+              }
+            },
+            {
+              "name": "Publish to Redis - BOOKING_ACCEPTED",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "redis-cli PUBLISH smr:notifications '{\"notificationId\":\"550e8400-e29b-41d4-a716-446655440100\",\"senderId\":\"550e8400-e29b-41d4-a716-446655440001\",\"receiverId\":\"550e8400-e29b-41d4-a716-446655440003\",\"type\":\"BOOKING_ACCEPTED\",\"payload\":{\"rideId\":\"RIDE-001\",\"driverName\":\"John Smith\",\"vehicleModel\":\"Toyota Prius\",\"licensePlate\":\"ABC-1234\",\"etaPickup\":\"5 minutes\",\"driverRating\":4.8,\"driverPhone\":\"+1-555-0123\"},\"timestamp\":\"2024-08-18T10:35:00Z\"}'"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Scenario 3: Ride Started",
+          "item": [
+            {
+              "name": "Description",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "📋 SCENARIO: Ride Started\n\nWhen: Driver starts the ride\nWho: User 1 (Driver) notifies User 3 (Rider)\n\nInclude live tracking URL and ETA"
+              }
+            },
+            {
+              "name": "Notification JSON",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "{\n  \"notificationId\": \"550e8400-e29b-41d4-a716-446655440101\",\n  \"senderId\": \"550e8400-e29b-41d4-a716-446655440001\",\n  \"receiverId\": \"550e8400-e29b-41d4-a716-446655440003\",\n  \"type\": \"RIDE_STARTED\",\n  \"payload\": {\n    \"rideId\": \"RIDE-001\",\n    \"liveTrackingUrl\": \"https://maps.google.com/?q=50.1234,14.5678\",\n    \"currentLocation\": \"Main Street\",\n    \"etaDestination\": \"20 minutes\",\n    \"currentSpeed\": \"45 km/h\",\n    \"distanceRemaining\": \"12.5 km\"\n  },\n  \"timestamp\": \"2024-08-18T10:40:00Z\"\n}"
+              }
+            },
+            {
+              "name": "Publish to Redis - RIDE_STARTED",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "redis-cli PUBLISH smr:notifications '{\"notificationId\":\"550e8400-e29b-41d4-a716-446655440101\",\"senderId\":\"550e8400-e29b-41d4-a716-446655440001\",\"receiverId\":\"550e8400-e29b-41d4-a716-446655440003\",\"type\":\"RIDE_STARTED\",\"payload\":{\"rideId\":\"RIDE-001\",\"liveTrackingUrl\":\"https://maps.google.com/?q=50.1234,14.5678\",\"currentLocation\":\"Main Street\",\"etaDestination\":\"20 minutes\",\"currentSpeed\":\"45 km/h\",\"distanceRemaining\":\"12.5 km\"},\"timestamp\":\"2024-08-18T10:40:00Z\"}'"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Scenario 4: Ride Completed",
+          "item": [
+            {
+              "name": "Description",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "📋 SCENARIO: Ride Completed\n\nWhen: Ride reaches destination\nWho: User 1 (Driver) notifies User 3 (Rider)\n\nInclude: Total distance, fare, rating, receipt URL"
+              }
+            },
+            {
+              "name": "Notification JSON",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "{\n  \"notificationId\": \"550e8400-e29b-41d4-a716-446655440102\",\n  \"senderId\": \"550e8400-e29b-41d4-a716-446655440001\",\n  \"receiverId\": \"550e8400-e29b-41d4-a716-446655440003\",\n  \"type\": \"RIDE_COMPLETED\",\n  \"payload\": {\n    \"rideId\": \"RIDE-001\",\n    \"totalDistance\": \"15.2 km\",\n    \"totalAmount\": 25.50,\n    \"currency\": \"USD\",\n    \"rating\": 5,\n    \"receiptUrl\": \"https://smr.com/receipts/RIDE-001.pdf\",\n    \"completionTime\": \"2024-08-18T11:00:00Z\",\n    \"driverComments\": \"Great ride, thank you!\"\n  },\n  \"timestamp\": \"2024-08-18T11:00:00Z\"\n}"
+              }
+            },
+            {
+              "name": "Publish to Redis - RIDE_COMPLETED",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "about:blank",
+                  "protocol": "about",
+                  "host": ["blank"]
+                },
+                "description": "redis-cli PUBLISH smr:notifications '{\"notificationId\":\"550e8400-e29b-41d4-a716-446655440102\",\"senderId\":\"550e8400-e29b-41d4-a716-446655440001\",\"receiverId\":\"550e8400-e29b-41d4-a716-446655440003\",\"type\":\"RIDE_COMPLETED\",\"payload\":{\"rideId\":\"RIDE-001\",\"totalDistance\":\"15.2 km\",\"totalAmount\":25.50,\"currency\":\"USD\",\"rating\":5,\"receiptUrl\":\"https://smr.com/receipts/RIDE-001.pdf\",\"completionTime\":\"2024-08-18T11:00:00Z\",\"driverComments\":\"Great ride, thank you!\"},\"timestamp\":\"2024-08-18T11:00:00Z\"}'"
+              }
+            }
+          ]
+        }
+      ],
+      "description": "Complete test scenarios with mock data for the entire ride-sharing notification flow"
+    },
+    {
+      "name": "🔗 WebSocket Testing Guide",
+      "item": [
+        {
+          "name": "Step 1: Open Terminal",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "about:blank",
+              "protocol": "about",
+              "host": ["blank"]
+            },
+            "description": "Open a terminal/command prompt"
+          }
+        },
+        {
+          "name": "Step 2: Install wscat",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "about:blank",
+              "protocol": "about",
+              "host": ["blank"]
+            },
+            "description": "Command:\nnpm install -g wscat\n\nVerify:\nwscat --version"
+          }
+        },
+        {
+          "name": "Step 3: Connect to WebSocket",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "about:blank",
+              "protocol": "about",
+              "host": ["blank"]
+            },
+            "description": "Command:\nwscat -c ws://localhost:8080/ws\n\nWait for connection to establish"
+          }
+        },
+        {
+          "name": "Step 4: Send STOMP CONNECT",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "about:blank",
+              "protocol": "about",
+              "host": ["blank"]
+            },
+            "description": "Send this STOMP frame (paste into wscat):\n\nCONNECT\nAuthorization: Bearer YOUR_JWT_TOKEN_HERE\naccept-version:1.0,1.1,1.2\nheart-beat:0,0\n\nThen press ENTER twice"
+          }
+        },
+        {
+          "name": "Step 5: Subscribe to Queue",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "about:blank",
+              "protocol": "about",
+              "host": ["blank"]
+            },
+            "description": "Send this STOMP frame:\n\nSUBSCRIBE\nid:0\ndestination:/user/550e8400-e29b-41d4-a716-446655440001/queue/notifications\n\nThen press ENTER twice"
+          }
+        },
+        {
+          "name": "Step 6: Publish Notification (in another terminal)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "about:blank",
+              "protocol": "about",
+              "host": ["blank"]
+            },
+            "description": "In another terminal:\n\nredis-cli PUBLISH smr:notifications '{...notification json...}'\n\nThe WebSocket should receive the message!"
+          }
+        },
+        {
+          "name": "Expected WebSocket Response",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "about:blank",
+              "protocol": "about",
+              "host": ["blank"]
+            },
+            "description": "You should see:\n\nMESSAGE\ndestination:/user/550e8400-e29b-41d4-a716-446655440001/queue/notifications\nmessage-id:ID:notif:1:1:1:1\ncontent-length:...\n\n{...notification json...}"
+          }
+        }
+      ],
+      "description": "Step-by-step guide to test WebSocket connections and real-time notifications"
+    },
+    {
+      "name": "💡 Helpful Commands",
+      "item": [
+        {
+          "name": "Redis Commands",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "about:blank",
+              "protocol": "about",
+              "host": ["blank"]
+            },
+            "description": "# Verify Redis Connection\nredis-cli ping\n# Should return: PONG\n\n# View all stored keys\nredis-cli keys *\n\n# View stored token for a user\nredis-cli get \"550e8400-e29b-41d4-a716-446655440001\"\n\n# Publish a message\nredis-cli PUBLISH smr:notifications '{...json...}'\n\n# Monitor all messages\nredis-cli monitor"
+          }
+        },
+        {
+          "name": "Application Startup",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "about:blank",
+              "protocol": "about",
+              "host": ["blank"]
+            },
+            "description": "# Navigate to project\ncd c:\\Users\\Nagraj Nandal\\Desktop\\GitHub\\New folder\\Backend\\notify\n\n# Clean and install\nmvn clean install\n\n# Run application\nmvn spring-boot:run\n\n# Application will start at:\nhttp://localhost:8080"
+          }
+        },
+        {
+          "name": "Verify Services Running",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "about:blank",
+              "protocol": "about",
+              "host": ["blank"]
+            },
+            "description": "# Check Redis\nredis-cli ping\n\n# Check Application\ncurl http://localhost:8080\n\n# Check WebSocket endpoint\ncurl -i -N -H \"Connection: Upgrade\" -H \"Upgrade: websocket\" http://localhost:8080/ws"
+          }
+        }
+      ]
+    }
+  ]
+}

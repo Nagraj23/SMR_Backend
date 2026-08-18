@@ -1,0 +1,531 @@
+{
+  "info": {
+    "name": "Ride Search API - Complete Test Suite",
+    "description": "Comprehensive testing suite for Secure Polyglot Search Engine Cluster with mock data",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "item": [
+    {
+      "name": "1️⃣ Nearby Pickup Search - Small Radius (1 km)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response has matches_found property', function () {",
+              "    let jsonData = pm.response.json();",
+              "    pm.expect(jsonData).to.have.property('matches_found');",
+              "});",
+              "",
+              "pm.test('Response has results array', function () {",
+              "    let jsonData = pm.response.json();",
+              "    pm.expect(jsonData.results).to.be.an('array');",
+              "});",
+              "",
+              "pm.test('Results sorted by distance', function () {",
+              "    let jsonData = pm.response.json();",
+              "    let results = jsonData.results;",
+              "    for (let i = 1; i < results.length; i++) {",
+              "        pm.expect(results[i].pickup_distance_km).to.be.at.least(results[i-1].pickup_distance_km);",
+              "    }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": 18.6750,\n  \"lon\": 75.9050,\n  \"radius_km\": 1.0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/nearby-pickup",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "nearby-pickup"
+          ]
+        },
+        "description": "Search for nearby rides by passenger pickup location.\n\n**Mock Scenario**: Passenger at Indore city center (18.6750°N, 75.9050°E) searching for rides within 1 km.\n\n**Expected Behavior**: Should find RIDE001 and RIDE002 within 1 km radius."
+      }
+    },
+    {
+      "name": "2️⃣ Nearby Pickup Search - Large Radius (25 km)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('More results with larger radius', function () {",
+              "    let jsonData = pm.response.json();",
+              "    pm.expect(jsonData.results.length).to.be.greaterThan(2);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": 18.6750,\n  \"lon\": 75.9050,\n  \"radius_km\": 25.0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/nearby-pickup",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "nearby-pickup"
+          ]
+        },
+        "description": "Search with a larger radius to find more rides.\n\n**Mock Scenario**: Same location but with 25 km search radius.\n\n**Expected Behavior**: Should find RIDE001, RIDE002, RIDE003, and RIDE005."
+      }
+    },
+    {
+      "name": "3️⃣ Nearby Destination Search - 2 km Radius",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Results sorted by dropoff distance', function () {",
+              "    let jsonData = pm.response.json();",
+              "    let results = jsonData.results;",
+              "    for (let i = 1; i < results.length; i++) {",
+              "        pm.expect(results[i].dropoff_distance_km).to.be.at.least(results[i-1].dropoff_distance_km);",
+              "    }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"dest_lat\": 19.0760,\n  \"dest_lon\": 72.8777,\n  \"radius_km\": 2.0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/nearby-destination",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "nearby-destination"
+          ]
+        },
+        "description": "Find rides that end near a target destination.\n\n**Mock Scenario**: Passenger wants to reach Mumbai city center (19.0760°N, 72.8777°E). Search within 2 km.\n\n**Expected Behavior**: Should find RIDE001 and RIDE003 whose dropoff points are near Mumbai."
+      }
+    },
+    {
+      "name": "4️⃣ Destination Search - Large Radius (10 km)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Results array is not empty', function () {",
+              "    let jsonData = pm.response.json();",
+              "    pm.expect(jsonData.results).to.be.an('array').that.is.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"dest_lat\": 19.0760,\n  \"dest_lon\": 72.8777,\n  \"radius_km\": 10.0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/nearby-destination",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "nearby-destination"
+          ]
+        },
+        "description": "Same destination but with larger 10 km search radius.\n\n**Expected Behavior**: Should find additional rides including RIDE004."
+      }
+    },
+    {
+      "name": "5️⃣ Exact Route Match - Both Source & Destination",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Response contains pickup_distance and dropoff_distance', function () {",
+              "    let jsonData = pm.response.json();",
+              "    if (jsonData.results.length > 0) {",
+              "        let firstResult = jsonData.results[0];",
+              "        pm.expect(firstResult).to.have.property('pickup_distance_km');",
+              "        pm.expect(firstResult).to.have.property('dropoff_distance_km');",
+              "    }",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"source_lat\": 18.6750,\n  \"source_lon\": 75.9050,\n  \"dest_lat\": 19.0760,\n  \"dest_lon\": 72.8777,\n  \"pickup_radius\": 1.0,\n  \"dropoff_radius\": 2.0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/search-exact",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "search-exact"
+          ]
+        },
+        "description": "Find rides matching BOTH pickup and destination criteria.\n\n**Mock Scenario**: Passenger at Indore (18.6750°N, 75.9050°E) wants to reach Mumbai (19.0760°N, 72.8777°E).\n\n**Expected Behavior**: Should find RIDE001 and RIDE003 that match both pickup (within 1 km) and dropoff (within 2 km) criteria."
+      }
+    },
+    {
+      "name": "6️⃣ Exact Route Match - Stricter Criteria",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"source_lat\": 18.6750,\n  \"source_lon\": 75.9050,\n  \"dest_lat\": 19.0760,\n  \"dest_lon\": 72.8777,\n  \"pickup_radius\": 0.5,\n  \"dropoff_radius\": 1.0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/search-exact",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "search-exact"
+          ]
+        },
+        "description": "Same route but with stricter radius constraints.\n\n**Expected Behavior**: Should find fewer matches or possibly only RIDE001."
+      }
+    },
+    {
+      "name": "❌ ERROR: Invalid Latitude (>90)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 422 - Validation Error', function () {",
+              "    pm.response.to.have.status(422);",
+              "});",
+              "",
+              "pm.test('Error message mentions latitude bounds', function () {",
+              "    let jsonData = pm.response.json();",
+              "    pm.expect(JSON.stringify(jsonData)).to.include('latitude');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": 95.0,\n  \"lon\": 75.9050,\n  \"radius_km\": 1.0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/nearby-pickup",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "nearby-pickup"
+          ]
+        },
+        "description": "Test validation: Latitude must be between -90 and 90.\n\n**Expected**: HTTP 422 with validation error."
+      }
+    },
+    {
+      "name": "❌ ERROR: Invalid Longitude (>180)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 422 - Validation Error', function () {",
+              "    pm.response.to.have.status(422);",
+              "});",
+              "",
+              "pm.test('Error message mentions longitude bounds', function () {",
+              "    let jsonData = pm.response.json();",
+              "    pm.expect(JSON.stringify(jsonData)).to.include('longitude');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": 18.6750,\n  \"lon\": 185.0,\n  \"radius_km\": 1.0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/nearby-pickup",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "nearby-pickup"
+          ]
+        },
+        "description": "Test validation: Longitude must be between -180 and 180.\n\n**Expected**: HTTP 422 with validation error."
+      }
+    },
+    {
+      "name": "❌ ERROR: Radius Below Minimum (< 0.1 km)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 422 - Validation Error', function () {",
+              "    pm.response.to.have.status(422);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": 18.6750,\n  \"lon\": 75.9050,\n  \"radius_km\": 0.05\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/nearby-pickup",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "nearby-pickup"
+          ]
+        },
+        "description": "Test validation: Radius must be >= 0.1 km for nearby-pickup.\n\n**Expected**: HTTP 422 with validation error."
+      }
+    },
+    {
+      "name": "❌ ERROR: Radius Exceeds Maximum (> 10 km)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 422 - Validation Error', function () {",
+              "    pm.response.to.have.status(422);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": 18.6750,\n  \"lon\": 75.9050,\n  \"radius_km\": 15.0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/nearby-pickup",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "nearby-pickup"
+          ]
+        },
+        "description": "Test validation: Radius must be <= 10 km for nearby-pickup.\n\n**Expected**: HTTP 422 with validation error."
+      }
+    },
+    {
+      "name": "⚪ Zero Matches - No Rides Found",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status code is 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Empty results array when no matches', function () {",
+              "    let jsonData = pm.response.json();",
+              "    pm.expect(jsonData.matches_found).to.equal(0);",
+              "    pm.expect(jsonData.results).to.be.an('array').that.is.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"lat\": 40.7128,\n  \"lon\": -74.0060,\n  \"radius_km\": 1.0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/rides/nearby-pickup",
+          "protocol": "http",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "rides",
+            "nearby-pickup"
+          ]
+        },
+        "description": "Test with coordinates far from any mock rides (New York, USA).\n\n**Expected**: HTTP 200 with empty results array."
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ]
+}

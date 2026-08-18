@@ -17,10 +17,8 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
-                        // WebSocket handshake
                         .requestMatchers("/ws/**").permitAll()
 
-                        // Allow everything else for now
                         .anyRequest().permitAll()
                 );
 
