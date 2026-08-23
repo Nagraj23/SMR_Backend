@@ -8,6 +8,7 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import com.smr.ride.service.KafkaProducerService;
 
 import java.time.Instant;
 import java.util.Map;
@@ -21,7 +22,7 @@ public class NotificationHubService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ChannelTopic rideTopic;
     private final ObjectMapper objectMapper;
-
+    private final KafkaProducerService kafkaProducerService;
     @Async("notificationExecutor")
     public void sendRedisNotification(
             UUID senderId,
@@ -39,6 +40,7 @@ public class NotificationHubService {
                     .timestamp(Instant.now())
                     .build();
 
+            kafkaProducerService.sendEvent(recipientUserId, event);
             // Convert to clean JSON string without @class type metadata
             String jsonPayload = objectMapper.writeValueAsString(event);
 

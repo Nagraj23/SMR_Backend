@@ -10,7 +10,7 @@ public class WebConfig {
     @Bean
     public WebClient webClient() {
         return WebClient.builder()
-                .baseUrl("http://10.158.244.135:8000") // 🎯 Your FastAPI container's local network gate
+                .baseUrl("http://10.143.177.135:8000") // 🎯 Your FastAPI container's local network gate
                 .build();
     }
 }
